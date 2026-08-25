@@ -29,6 +29,7 @@ import { billStatus } from "@/lib/finance/calculations";
 import { daysUntil, todayISO } from "@/lib/utils/dates";
 import { billSchema, type BillValues } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/firebase/errors";
+import { EntityNotes } from "@/components/notes/entity-notes";
 
 export function BillsView() {
   const { profile } = useAuth();
@@ -84,6 +85,18 @@ export function BillsView() {
                     </Button>
                   </div>
                 </CardContent>
+                <div className="px-5 pb-4">
+                  <EntityNotes
+                    type="bill"
+                    entityId={bill.id}
+                    entityName={bill.name}
+                    inlineNote={bill.notes}
+                    compact
+                    onSaveInline={async (value) => {
+                      await saveBill({ ...bill, notes: value }, bill.id);
+                    }}
+                  />
+                </div>
               </Card>
             );
           })}

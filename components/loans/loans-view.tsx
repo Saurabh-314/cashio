@@ -29,6 +29,7 @@ import { loanProgress } from "@/lib/finance/calculations";
 import { todayISO } from "@/lib/utils/dates";
 import { loanSchema, type LoanValues } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/firebase/errors";
+import { EntityNotes } from "@/components/notes/entity-notes";
 
 export function LoansView() {
   const { profile } = useAuth();
@@ -114,6 +115,16 @@ export function LoansView() {
                   >
                     Record payment
                   </Button>
+                  <EntityNotes
+                    type="loan"
+                    entityId={loan.id}
+                    entityName={loan.name}
+                    inlineNote={loan.notes}
+                    compact
+                    onSaveInline={async (value) => {
+                      await saveLoan({ ...loan, notes: value }, loan.id);
+                    }}
+                  />
                 </CardContent>
               </Card>
             );

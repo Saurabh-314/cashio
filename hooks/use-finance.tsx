@@ -13,8 +13,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { format, parseISO } from "date-fns";
 import { roundMoney } from "@/lib/finance/money";
 import { lastNMonthsRange, todayISO } from "@/lib/utils/dates";
 import { useAuth } from "@/hooks/use-auth";
@@ -35,6 +37,26 @@ import {
   updateTransaction,
   type TransactionInput,
 } from "@/services/transactions";
+import {
+  addNoteAttachment,
+  archiveNote as archiveNoteDoc,
+  createNote,
+  deleteNotePermanently,
+  mapNote,
+  mapNoteCategory,
+  moveNoteToTrash,
+  purgeExpiredTrash,
+  removeNoteAttachment,
+  removeNoteCategory as removeNoteCategoryDoc,
+  restoreFromTrash,
+  restoreNote as restoreNoteDoc,
+  saveNote as saveNoteDoc,
+  saveNoteCategory as saveNoteCategoryDoc,
+  seedDefaultNoteCategories,
+  setNotePinned,
+  type NoteInput,
+} from "@/services/notes";
+import { DEFAULT_NOTE_TRASH_DAYS } from "@/constants/notes";
 import { createAccount, updateUserProfile } from "@/services/users";
 import {
   addPersonNote,
@@ -64,6 +86,9 @@ import type {
   Goal,
   Investment,
   Loan,
+  Note,
+  NoteAttachment,
+  NoteCategory,
   Person,
   PersonNote,
   QuickAddKind,
@@ -97,6 +122,19 @@ interface FinanceContextValue {
   udhars: Udhar[];
   udharRepayments: UdharRepayment[];
   peopleNotes: PersonNote[];
+  notes: Note[];
+  noteCategories: NoteCategory[];
+  saveNote: (input: NoteInput, id?: string) => Promise<string>;
+  pinNote: (id: string, isPinned: boolean) => Promise<void>;
+  archiveNote: (id: string) => Promise<void>;
+  restoreNote: (id: string) => Promise<void>;
+  trashNote: (id: string) => Promise<void>;
+  restoreTrashedNote: (id: string) => Promise<void>;
+  deleteNoteForever: (id: string) => Promise<void>;
+  addNoteFile: (noteId: string, file: NoteAttachment) => Promise<void>;
+  removeNoteFile: (noteId: string, attachmentId: string) => Promise<void>;
+  saveNoteCategory: (input: { name: string; icon?: string; color?: string }, id?: string) => Promise<string>;
+  removeNoteCategory: (id: string) => Promise<void>;
   saveAccount: (
     input: Omit<Account, "id" | "createdAt" | "updatedAt" | "currentBalance" | "outstanding" | "archived">,
     id?: string,
@@ -227,7 +265,7 @@ function mapDocs<T>(docs: { id: string; data: () => Record<string, unknown> }[])
 }
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const uid = user?.uid;
   const [loading, setLoading] = useState(Boolean(uid));
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -247,8 +285,11 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [udhars, setUdhars] = useState<Udhar[]>([]);
   const [udharRepayments, setUdharRepayments] = useState<UdharRepayment[]>([]);
   const [peopleNotes, setPeopleNotes] = useState<PersonNote[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [noteCategories, setNoteCategories] = useState<NoteCategory[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddKind, setQuickAddKind] = useState<QuickAddKind>("expense");
+  const trashPurged = useRef(false);
 
   useEffect(() => {
     if (!uid) return;
@@ -278,6 +319,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         setUdharRepayments(mapDocs<UdharRepayment>(snap.docs)),
       ),
       onSnapshot(col(uid, "peopleNotes"), (snap) => setPeopleNotes(mapDocs<PersonNote>(snap.docs))),
+      onSnapshot(col(uid, "notes"), (snap) => {
+        const items = snap.docs.map((item) => mapNote(item.id, item.data()));
+        setNotes(items);
+      }),
+      onSnapshot(col(uid, "noteCategories"), (snap) => {
+        const items = snap.docs.map((item) => mapNoteCategory(item.id, item.data()));
+        setNoteCategories(items);
+        if (items.length === 0) {
+          void seedDefaultNoteCategories(uid);
+        }
+      }),
     ];
 
     const range = lastNMonthsRange(18);
@@ -306,6 +358,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       unsubs.forEach((unsub) => unsub());
     };
   }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      trashPurged.current = false;
+      return;
+    }
+    if (!notes.length || trashPurged.current) return;
+    trashPurged.current = true;
+    const days = profile?.noteTrashDays ?? DEFAULT_NOTE_TRASH_DAYS;
+    void purgeExpiredTrash(uid, notes, days);
+  }, [uid, notes, profile?.noteTrashDays]);
 
   const saveAccount = useCallback(
     async (
@@ -704,7 +767,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
           type: "expense",
           amount: payAmount,
           date: input.date,
-          description: `${activity.name} — ${input.month}`,
+          description: `${activity.name} - ${format(parseISO(`${input.month}-01`), "MMMM yyyy")}`,
           categoryId: activity.expenseCategoryId ?? activity.categoryId ?? null,
           accountId: input.accountId,
           fromAccountId: null,
@@ -951,6 +1014,115 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [uid],
   );
 
+  const saveJournalNote = useCallback(
+    async (input: NoteInput, id?: string) => {
+      if (!uid) throw new Error("Not signed in");
+      if (id) {
+        const previous = notes.find((item) => item.id === id);
+        await saveNoteDoc(uid, id, input, previous);
+        return id;
+      }
+      return createNote(uid, input);
+    },
+    [uid, notes],
+  );
+
+  const pinNote = useCallback(
+    async (id: string, isPinned: boolean) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await setNotePinned(uid, note, isPinned);
+    },
+    [uid, notes],
+  );
+
+  const archiveJournalNote = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await archiveNoteDoc(uid, note);
+    },
+    [uid, notes],
+  );
+
+  const restoreJournalNote = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await restoreNoteDoc(uid, note);
+    },
+    [uid, notes],
+  );
+
+  const trashJournalNote = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await moveNoteToTrash(uid, note);
+    },
+    [uid, notes],
+  );
+
+  const restoreTrashedNote = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await restoreFromTrash(uid, note);
+    },
+    [uid, notes],
+  );
+
+  const deleteNoteForever = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === id);
+      if (!note) return;
+      await deleteNotePermanently(uid, note);
+    },
+    [uid, notes],
+  );
+
+  const addNoteFile = useCallback(
+    async (noteId: string, file: NoteAttachment) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === noteId);
+      if (!note) return;
+      await addNoteAttachment(uid, note, file);
+    },
+    [uid, notes],
+  );
+
+  const removeNoteFile = useCallback(
+    async (noteId: string, attachmentId: string) => {
+      if (!uid) return;
+      const note = notes.find((item) => item.id === noteId);
+      if (!note) return;
+      await removeNoteAttachment(uid, note, attachmentId);
+    },
+    [uid, notes],
+  );
+
+  const saveJournalCategory = useCallback(
+    async (input: { name: string; icon?: string; color?: string }, id?: string) => {
+      if (!uid) throw new Error("Not signed in");
+      return saveNoteCategoryDoc(uid, input, id);
+    },
+    [uid],
+  );
+
+  const removeJournalCategory = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      await removeNoteCategoryDoc(uid, id);
+    },
+    [uid],
+  );
+
   const updateProfile = useCallback(
     async (patch: Partial<UserProfile>) => {
       if (!uid) return;
@@ -979,6 +1151,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       udhars,
       udharRepayments,
       peopleNotes,
+      notes,
+      noteCategories,
+      saveNote: saveJournalNote,
+      pinNote,
+      archiveNote: archiveJournalNote,
+      restoreNote: restoreJournalNote,
+      trashNote: trashJournalNote,
+      restoreTrashedNote,
+      deleteNoteForever,
+      addNoteFile,
+      removeNoteFile,
+      saveNoteCategory: saveJournalCategory,
+      removeNoteCategory: removeJournalCategory,
       saveAccount,
       archiveAccount,
       removeAccount,
@@ -1049,6 +1234,19 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       udhars,
       udharRepayments,
       peopleNotes,
+      notes,
+      noteCategories,
+      saveJournalNote,
+      pinNote,
+      archiveJournalNote,
+      restoreJournalNote,
+      trashJournalNote,
+      restoreTrashedNote,
+      deleteNoteForever,
+      addNoteFile,
+      removeNoteFile,
+      saveJournalCategory,
+      removeJournalCategory,
       saveAccount,
       archiveAccount,
       removeAccount,

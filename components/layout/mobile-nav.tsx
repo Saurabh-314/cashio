@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { MOBILE_NAV } from "@/constants/navigation";
 import { useFinance } from "@/hooks/use-finance";
@@ -9,15 +9,20 @@ import { cn } from "@/lib/utils";
 
 export function MobileNav() {
   const pathname = usePathname();
+  const router = useRouter();
   const { openQuickAdd } = useFinance();
+  const onNotes = pathname.startsWith("/notes");
 
   return (
     <>
       <button
         type="button"
-        onClick={() => openQuickAdd("expense")}
-        className="fixed right-4 bottom-20 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-hover)] transition-colors duration-200 hover:bg-primary/90 md:hidden"
-        aria-label="Add transaction"
+        onClick={() => (onNotes ? router.push("/notes/new") : openQuickAdd("expense"))}
+        className={cn(
+          "fixed right-4 bottom-20 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-hover)] transition-colors duration-200 hover:bg-primary/90 md:hidden",
+          onNotes && "hidden",
+        )}
+        aria-label={onNotes ? "New note" : "Add transaction"}
       >
         <Plus className="size-5" />
       </button>

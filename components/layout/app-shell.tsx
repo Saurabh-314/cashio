@@ -4,6 +4,8 @@ import { AppHeader } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { Sidebar } from "@/components/layout/sidebar";
 import { QuickAdd } from "@/components/forms/quick-add";
+import { NoteShortcuts } from "@/components/notes/note-shortcuts";
+import { NoteReminders } from "@/components/notes/note-reminders";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +19,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MobileNav />
       <QuickAdd />
+      <NoteShortcuts />
+      <NoteReminders />
     </div>
   );
 }

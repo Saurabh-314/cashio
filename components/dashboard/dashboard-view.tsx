@@ -47,6 +47,7 @@ import {
 } from "@/lib/finance/udhar";
 import { Wallet } from "lucide-react";
 import { format } from "date-fns";
+import { previewText, visibleReminders } from "@/lib/notes";
 
 const IncomeExpenseChart = dynamic(
   () => import("@/components/charts/finance-charts").then((mod) => mod.IncomeExpenseChart),
@@ -70,7 +71,7 @@ const RANGE_OPTIONS = [
 
 export function DashboardView() {
   const { profile } = useAuth();
-  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, people, udhars, udharRepayments, openQuickAdd } =
+  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, people, udhars, udharRepayments, notes, openQuickAdd } =
     useFinance();
   const router = useRouter();
   const [rangeId, setRangeId] = useState<(typeof RANGE_OPTIONS)[number]["id"]>("6m");
@@ -438,7 +439,7 @@ export function DashboardView() {
           {show("dailyCheck") ? (
             <Card>
               <CardHeader className="flex-row items-center justify-between">
-                <CardTitle>Today's activities</CardTitle>
+                <CardTitle>Today&apos;s activities</CardTitle>
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/daily-check">View</Link>
                 </Button>
@@ -484,6 +485,39 @@ export function DashboardView() {
                   ))
                 ) : (
                   <p className="text-sm text-muted-foreground">No service payments due.</p>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {show("notes") ? (
+            <Card>
+              <CardHeader className="flex-row items-center justify-between">
+                <CardTitle>Notes</CardTitle>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/notes">View all notes</Link>
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {visibleReminders(notes).slice(0, 2).map((note) => (
+                  <Link key={`reminder-${note.id}`} href={`/notes/${note.id}`} className="block">
+                    <p className="text-sm font-medium">{note.title} reminder</p>
+                    <p className="text-xs text-muted-foreground">Due now</p>
+                  </Link>
+                ))}
+                {notes.filter((item) => !item.isDeleted && !item.isArchived).length ? (
+                  notes
+                    .filter((item) => !item.isDeleted && !item.isArchived)
+                    .sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt.localeCompare(a.updatedAt))
+                    .slice(0, 3)
+                    .map((note) => (
+                      <Link key={note.id} href={`/notes/${note.id}`} className="block">
+                        <p className="text-sm font-medium">{note.title}</p>
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{previewText(note.content, 80)}</p>
+                      </Link>
+                    ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No notes yet.</p>
                 )}
               </CardContent>
             </Card>

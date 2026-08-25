@@ -22,6 +22,7 @@ import { goalProgress } from "@/lib/finance/calculations";
 import { ACCOUNT_COLORS } from "@/constants/categories";
 import { goalSchema, type GoalValues } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/firebase/errors";
+import { EntityNotes } from "@/components/notes/entity-notes";
 
 export function GoalsView() {
   const { profile } = useAuth();
@@ -76,6 +77,16 @@ export function GoalsView() {
                   <Button size="sm" variant="outline" onClick={() => setContributeId(goal.id)}>
                     Add money
                   </Button>
+                  <EntityNotes
+                    type="goal"
+                    entityId={goal.id}
+                    entityName={goal.name}
+                    inlineNote={goal.description}
+                    compact
+                    onSaveInline={async (value) => {
+                      await saveGoal({ ...goal, description: value }, goal.id);
+                    }}
+                  />
                 </CardContent>
               </Card>
             );

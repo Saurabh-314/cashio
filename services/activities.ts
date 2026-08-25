@@ -7,6 +7,7 @@ import {
   recordId,
   remainingDue,
   settlementId,
+  activityUnitPrice,
 } from "@/lib/finance/activity-calculations";
 import { roundMoney } from "@/lib/finance/money";
 import { monthKey, todayISO } from "@/lib/utils/dates";
@@ -58,6 +59,8 @@ export function buildCheckRecord(input: {
     date: input.date,
     status: input.status,
     quantity,
+    unitPrice: activityUnitPrice(input.activity),
+    unit: input.activity.unit,
     calculatedAmount,
     skipReason: input.skipReason,
     notes: input.notes,

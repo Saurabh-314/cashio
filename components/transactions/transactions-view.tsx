@@ -39,6 +39,7 @@ import {
   transactionAmountTone,
   transactionTypeLabel,
 } from "@/lib/finance/calculations";
+import { EntityNotes } from "@/components/notes/entity-notes";
 import type { Transaction, TransactionType } from "@/types";
 
 export function TransactionsView() {
@@ -282,9 +283,20 @@ export function TransactionsView() {
                   }
                 />
                 <Row label="Merchant" value={selected.merchant || "—"} />
-                <Row label="Notes" value={selected.notes || "—"} />
                 <Row label="Created" value={formatDate(selected.createdAt.slice(0, 10), profile?.dateFormat)} />
               </dl>
+              <EntityNotes
+                type="transaction"
+                entityId={selected.id}
+                entityName={selected.description}
+                inlineNote={selected.notes}
+                compact
+                onSaveInline={async (value) => {
+                  await saveTransaction({ ...selected, notes: value }, selected.id);
+                  setSelected({ ...selected, notes: value });
+                  toast.success("Note saved");
+                }}
+              />
               {isUdharTransaction(selected) ? (
                 <p className="text-sm text-muted-foreground">
                   This only moved money between you and a person. It is not income or expense

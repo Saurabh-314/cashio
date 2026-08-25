@@ -33,20 +33,24 @@ import { ACTIVITY_GROUPS, SKIP_REASONS } from "@/constants/activities";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
 import {
+  formatQuantityWithUnit,
   formatSchedule,
   monthStats,
   monthSummary,
   occurrenceAmount,
-  pricingLabel,
+  occurrencePeriodLabel,
   previewSettlement,
   todayRows,
   todayStats,
+  usesQuantity,
 } from "@/lib/finance/activity-calculations";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { monthKey, todayISO } from "@/lib/utils/dates";
 import { dailyCheckFollowUps, dueLabel } from "@/lib/finance/udhar";
 import { providerSchema, type ActivityValues, type ProviderValues } from "@/lib/validations";
 import type { Activity, CurrencyCode, SkipReason } from "@/types";
+import { EntityNotes } from "@/components/notes/entity-notes";
+import { ActivityPricingSummary, ActivityUnitPriceText } from "@/components/daily-check/activity-pricing";
 
 export function DailyCheckView() {
   const { profile } = useAuth();
@@ -249,13 +253,22 @@ export function DailyCheckView() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium">{row.activity.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {row.activity.providerName || formatSchedule(row.activity)} ·{" "}
-                        <CurrencyDisplay
-                          amount={occurrenceAmount(row.activity)}
-                          currency={currency}
-                          className="text-xs"
-                        />{" "}
-                        / {pricingLabel(row.activity)}
+                        {row.activity.providerName || formatSchedule(row.activity)}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        <ActivityUnitPriceText activity={row.activity} currency={currency} className="text-xs" />
+                        {usesQuantity(row.activity) ? (
+                          <>
+                            {" · "}
+                            {formatQuantityWithUnit(
+                              row.activity.defaultQuantity,
+                              row.activity.unit,
+                            )}
+                            /{occurrencePeriodLabel(row.activity)}
+                          </>
+                        ) : null}
+                        {" · "}
+                        <CurrencyDisplay amount={row.amount} currency={currency} className="text-xs font-medium text-foreground" /> today
                       </p>
                     </div>
                     <CheckStatusBadge status={row.status} />
@@ -338,6 +351,16 @@ export function DailyCheckView() {
                         <p className="text-sm font-medium">{row.activity.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {row.providerName} · {row.completedDays} completed
+                          {usesQuantity(row.activity) ? (
+                            <>
+                              {" · "}
+                              <ActivityUnitPriceText activity={row.activity} currency={currency} className="text-xs" />
+                              {" × "}
+                              {formatQuantityWithUnit(row.activity.defaultQuantity, row.activity.unit)}
+                              {" × "}
+                              {row.completedDays} days
+                            </>
+                          ) : null}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -380,23 +403,45 @@ export function DailyCheckView() {
                   .reduce((sum, row) => sum + row.due, 0);
                 return (
                   <Card key={provider.id} className="rounded-lg">
-                    <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-                      <div>
-                        <p className="font-medium">{provider.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {linked.map((item) => item.name).join(", ") || "No activities yet"}
-                          {provider.phone ? ` · ${provider.phone}` : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <p className="text-xs text-muted-foreground">Outstanding</p>
-                          <CurrencyDisplay amount={due} currency={currency} className="font-medium" />
+                    <CardContent className="space-y-4 py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{provider.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {linked.map((item) => item.name).join(", ") || "No activities yet"}
+                            {provider.phone ? ` · ${provider.phone}` : ""}
+                            {provider.paymentPreference ? ` · ${provider.paymentPreference.toUpperCase()}` : ""}
+                          </p>
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => removeProvider(provider.id)}>
-                          Remove
-                        </Button>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Outstanding</p>
+                            <CurrencyDisplay amount={due} currency={currency} className="font-medium" />
+                          </div>
+                          <Button size="sm" variant="ghost" onClick={() => removeProvider(provider.id)}>
+                            Remove
+                          </Button>
+                        </div>
                       </div>
+                      <EntityNotes
+                        type="provider"
+                        entityId={provider.id}
+                        entityName={provider.name}
+                        inlineNote={provider.notes}
+                        compact
+                        onSaveInline={async (value) => {
+                          await saveProvider(
+                            {
+                              name: provider.name,
+                              phone: provider.phone,
+                              address: provider.address,
+                              notes: value,
+                              paymentPreference: provider.paymentPreference,
+                            },
+                            provider.id,
+                          );
+                        }}
+                      />
                     </CardContent>
                   </Card>
                 );
@@ -609,10 +654,7 @@ function ActivityCard({
           </div>
           <CheckStatusBadge status={status} />
         </div>
-        <p className="text-sm">
-          <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" />
-          <span className="text-muted-foreground"> / {pricingLabel(activity)}</span>
-        </p>
+        <ActivityPricingSummary activity={activity} currency={currency} todayAmount={occurrenceAmount(activity)} />
         <p className="text-xs text-muted-foreground">
           This month {summary.completedDays}/{summary.expectedDays} ·{" "}
           <CurrencyDisplay amount={summary.amount} currency={currency} className="text-xs" />

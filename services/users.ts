@@ -34,6 +34,7 @@ export const DEFAULT_WIDGETS: DashboardWidgets = {
   dailyCheck: true,
   pendingSettlements: true,
   peopleUdhar: true,
+  notes: true,
 };
 
 export const DEFAULT_NOTIFICATIONS: NotificationPrefs = {
@@ -44,6 +45,7 @@ export const DEFAULT_NOTIFICATIONS: NotificationPrefs = {
   dailyCheck: true,
   settlements: true,
   udhar: true,
+  notes: true,
 };
 
 export async function createUserProfile(
@@ -62,11 +64,14 @@ export async function createUserProfile(
     theme: "system",
     widgets: DEFAULT_WIDGETS,
     notifications: DEFAULT_NOTIFICATIONS,
+    noteTrashDays: 30,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
   await setDoc(userDoc(uid), { ...profile, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   await seedDefaultCategories(uid);
+  const { seedDefaultNoteCategories } = await import("@/services/notes");
+  await seedDefaultNoteCategories(uid);
 }
 
 export async function updateUserProfile(uid: string, patch: Partial<UserProfile>): Promise<void> {

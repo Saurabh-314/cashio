@@ -87,6 +87,7 @@ export interface DashboardWidgets {
   dailyCheck: boolean;
   pendingSettlements: boolean;
   peopleUdhar: boolean;
+  notes: boolean;
 }
 
 export interface NotificationPrefs {
@@ -97,6 +98,7 @@ export interface NotificationPrefs {
   dailyCheck: boolean;
   settlements: boolean;
   udhar: boolean;
+  notes: boolean;
 }
 
 export interface UserProfile {
@@ -114,6 +116,7 @@ export interface UserProfile {
   notifications: NotificationPrefs;
   reminderTime?: string;
   udharReminderDays?: number;
+  noteTrashDays?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -295,7 +298,7 @@ export interface Insight {
   tone: "info" | "warning" | "success";
 }
 
-export type QuickAddKind = "expense" | "income" | "transfer" | "bill" | "goal" | "activity" | "udhar";
+export type QuickAddKind = "expense" | "income" | "transfer" | "bill" | "goal" | "activity" | "udhar" | "note";
 
 export type PersonRelationship =
   | "friend"
@@ -459,6 +462,8 @@ export interface ActivityRecord {
   status: Exclude<ActivityCheckStatus, "pending" | "missed">;
   quantity: number;
   calculatedAmount: number;
+  unitPrice?: number;
+  unit?: string;
   skipReason?: SkipReason;
   notes?: string;
   createdAt: string;
@@ -493,3 +498,83 @@ export interface ActivitySettlement {
   createdAt: string;
   updatedAt: string;
 }
+
+export type NoteRelatedType =
+  | "transaction"
+  | "account"
+  | "activity"
+  | "provider"
+  | "bill"
+  | "goal"
+  | "loan";
+
+export interface NoteRelatedEntity {
+  type: NoteRelatedType;
+  id: string;
+}
+
+export interface NoteAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  storagePath: string;
+  url: string;
+  createdAt: string;
+}
+
+export type NoteTimelineKind =
+  | "created"
+  | "updated"
+  | "reminder"
+  | "attachment"
+  | "archived"
+  | "restored"
+  | "pinned";
+
+export interface NoteTimelineEvent {
+  id: string;
+  kind: NoteTimelineKind;
+  label: string;
+  at: string;
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  categoryId?: string;
+  tags: string[];
+  isPinned: boolean;
+  isArchived: boolean;
+  isDeleted: boolean;
+  reminderAt?: string;
+  relatedEntity?: NoteRelatedEntity;
+  attachments: NoteAttachment[];
+  timeline: NoteTimelineEvent[];
+  deletedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteCategory {
+  id: string;
+  name: string;
+  icon?: string;
+  color?: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NoteStatusFilter = "active" | "pinned" | "archived" | "trash";
+
+export type NoteDateFilter = "any" | "today" | "week" | "month" | "custom";
+
+export type NoteSort =
+  | "updated"
+  | "created"
+  | "oldest"
+  | "az"
+  | "za"
+  | "pinned";

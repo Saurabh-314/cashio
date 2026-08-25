@@ -12,10 +12,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
 import { availableCredit, creditUtilization, periodTotals } from "@/lib/finance/calculations";
 import { monthRange } from "@/lib/utils/dates";
+import { EntityNotes } from "@/components/notes/entity-notes";
 
 export function AccountDetailView({ accountId }: { accountId: string }) {
   const { profile } = useAuth();
-  const { accounts, transactions, categories } = useFinance();
+  const { accounts, transactions, categories, saveAccount } = useFinance();
   const account = accounts.find((item) => item.id === accountId);
   const currency = profile?.currency ?? "INR";
 
@@ -111,6 +112,35 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
           </Card>
         </div>
       )}
+
+      <EntityNotes
+        type="account"
+        entityId={account.id}
+        entityName={account.name}
+        inlineNote={account.notes}
+        onSaveInline={async (value) => {
+          await saveAccount(
+            {
+              name: account.name,
+              kind: account.kind,
+              bankName: account.bankName,
+              bankAccountType: account.bankAccountType,
+              last4: account.last4,
+              openingBalance: account.openingBalance,
+              openingOutstanding: account.openingOutstanding,
+              currency: account.currency,
+              color: account.color,
+              icon: account.icon,
+              notes: value,
+              creditLimit: account.creditLimit,
+              billingDay: account.billingDay,
+              paymentDueDay: account.paymentDueDay,
+              interestRate: account.interestRate,
+            },
+            account.id,
+          );
+        }}
+      />
 
       <Card className="rounded-lg">
         <CardHeader>

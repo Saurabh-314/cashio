@@ -4,6 +4,8 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Custom email/password accounts live in appUsers. There is no Firebase Auth,
     // so rules cannot use request.auth. Access is by document id (email hash / uid).
+    // Notes, noteCategories, and all other user data live under users/{userId}
+    // so one user's documents are never mixed with another's path.
     match /appUsers/{emailKey} {
       allow get: if true;
       allow list: if false;
@@ -12,6 +14,14 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read, create, update, delete: if true;
+
+      match /notes/{noteId} {
+        allow read, create, update, delete: if true;
+      }
+
+      match /noteCategories/{categoryId} {
+        allow read, create, update, delete: if true;
+      }
 
       match /{collection}/{document=**} {
         allow read, create, update, delete: if true;

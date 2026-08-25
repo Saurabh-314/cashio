@@ -38,13 +38,16 @@ import { PAUSE_REASONS } from "@/constants/activities";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
 import {
+  activityQuantity,
   activityStreaks,
   dayStatus,
+  formatQuantityWithUnit,
   formatSchedule,
   monthSummary,
   occurrenceAmount,
   previewSettlement,
   pricingLabel,
+  usesQuantity,
 } from "@/lib/finance/activity-calculations";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { monthKey, todayISO } from "@/lib/utils/dates";
@@ -53,6 +56,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
 import type { ActivityCheckStatus } from "@/types";
+import { EntityNotes } from "@/components/notes/entity-notes";
+import { ActivityUnitPriceText } from "@/components/daily-check/activity-pricing";
 
 const SYMBOL: Record<ActivityCheckStatus, string> = {
   completed: "✓",
@@ -241,7 +246,7 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
               <Row label="Missed" value={`${summary?.missedDays ?? 0} days`} />
               <Row label="Rate" value={`${(summary?.rate ?? 0).toFixed(1)}%`} />
               <Row
-                label="Amount"
+                label={`${format(cursor, "MMMM")} total`}
                 value={<CurrencyDisplay amount={summary?.amount ?? 0} currency={currency} className="text-sm font-medium" />}
               />
               {streaks.current > 1 ? (
@@ -257,11 +262,28 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
               <CardTitle>Service</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <DynamicIcon name={activity.icon} className="size-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">
-                    <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" /> / {pricingLabel(activity)}
+              <div className="flex items-start gap-2">
+                <DynamicIcon name={activity.icon} className="mt-0.5 size-4 text-muted-foreground" />
+                <div className="space-y-1">
+                  <p className="font-medium">{activity.name}</p>
+                  <p>
+                    <ActivityUnitPriceText activity={activity} currency={currency} className="font-medium" />
+                  </p>
+                  {usesQuantity(activity) ? (
+                    <p className="text-muted-foreground">
+                      Daily quantity {formatQuantityWithUnit(activityQuantity(activity), activity.unit, pricingLabel(activity))}
+                    </p>
+                  ) : null}
+                  <p>
+                    Today&apos;s amount{" "}
+                    <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" />
+                  </p>
+                  <p className="text-muted-foreground">
+                    {format(cursor, "MMMM")} completed {summary?.completedDays ?? 0} days
+                  </p>
+                  <p>
+                    {format(cursor, "MMMM")} total{" "}
+                    <CurrencyDisplay amount={summary?.amount ?? 0} currency={currency} className="font-medium" />
                   </p>
                   <p className="text-xs text-muted-foreground">{activity.description || activity.notes || "No notes"}</p>
                 </div>
@@ -291,6 +313,28 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
           </Card>
         </div>
       </div>
+
+      <EntityNotes
+        type="activity"
+        entityId={activity.id}
+        entityName={activity.name}
+        inlineNote={activity.notes}
+        onSaveInline={async (value) => {
+          const { id, createdAt, updatedAt, ...rest } = current;
+          await saveActivity({ ...rest, notes: value }, id);
+          toast.success("Note saved");
+        }}
+      />
+
+      {provider ? (
+        <EntityNotes
+          type="provider"
+          entityId={provider.id}
+          entityName={provider.name}
+          inlineNote={provider.notes || activity.providerNotes}
+          title="Provider notes"
+        />
+      ) : null}
 
       <Card className="rounded-lg">
         <CardHeader>

@@ -220,6 +220,22 @@ export function SettingsView() {
               onChange={(event) => updateProfile({ reminderTime: event.target.value })}
             />
           </Field>
+          <Field label="Keep deleted notes for" className="sm:col-span-2">
+            <Select
+              value={String(profile?.noteTrashDays ?? 30)}
+              onValueChange={(value) => updateProfile({ noteTrashDays: Number(value) })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7 days</SelectItem>
+                <SelectItem value="14">14 days</SelectItem>
+                <SelectItem value="30">30 days</SelectItem>
+                <SelectItem value="90">90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
         </CardContent>
       </Card>
 

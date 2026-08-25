@@ -48,6 +48,10 @@ export function AppHeader() {
           className="hidden max-w-xs flex-1 md:block"
           onSubmit={(event) => {
             event.preventDefault();
+            if (pathname.startsWith("/notes")) {
+              router.push(`/notes?q=${encodeURIComponent(query)}`);
+              return;
+            }
             router.push(`/transactions?q=${encodeURIComponent(query)}`);
           }}
         >

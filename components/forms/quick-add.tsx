@@ -26,17 +26,20 @@ import { billSchema, goalSchema } from "@/lib/validations";
 import type { QuickAddKind } from "@/types";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/firebase/errors";
+import { Textarea } from "@/components/ui/textarea";
 
 function QuickAddBody() {
   const router = useRouter();
   const { profile } = useAuth();
-  const { quickAddKind, openQuickAdd, closeQuickAdd, saveBill, contributeToGoal, goals, accounts, categories } =
+  const { quickAddKind, openQuickAdd, closeQuickAdd, saveBill, contributeToGoal, goals, accounts, categories, saveNote, noteCategories } =
     useFinance();
   const [billName, setBillName] = useState("");
   const [billAmount, setBillAmount] = useState(0);
   const [billDue, setBillDue] = useState(todayISO());
   const [goalId, setGoalId] = useState("");
   const [goalAmount, setGoalAmount] = useState(0);
+  const [noteTitle, setNoteTitle] = useState("");
+  const [noteContent, setNoteContent] = useState("");
 
   async function createBill() {
     const parsed = billSchema.safeParse({
@@ -57,6 +60,30 @@ function QuickAddBody() {
         categoryId: categories.find((item) => item.name === "Bills & Utilities")?.id,
       });
       toast.success("Bill added");
+      closeQuickAdd();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    }
+  }
+
+  async function createNote() {
+    if (!noteTitle.trim()) {
+      toast.error("Enter a title");
+      return;
+    }
+    try {
+      const personal = noteCategories.find((item) => item.name === "Personal");
+      await saveNote({
+        title: noteTitle.trim(),
+        content: noteContent,
+        categoryId: personal?.id,
+        tags: [],
+        isPinned: false,
+        isArchived: false,
+      });
+      toast.success("Note saved");
+      setNoteTitle("");
+      setNoteContent("");
       closeQuickAdd();
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -88,6 +115,7 @@ function QuickAddBody() {
         <TabsTrigger value="activity">Activity</TabsTrigger>
         <TabsTrigger value="bill">Bill</TabsTrigger>
         <TabsTrigger value="goal">Goal</TabsTrigger>
+        <TabsTrigger value="note">Note</TabsTrigger>
         <TabsTrigger value="udhar">Udhar</TabsTrigger>
       </TabsList>
       <TabsContent value="expense">
@@ -147,6 +175,22 @@ function QuickAddBody() {
         </Field>
         <Button className="w-full" onClick={contribute} disabled={!accounts.length}>
           Add contribution
+        </Button>
+      </TabsContent>
+      <TabsContent value="note" className="space-y-3">
+        <Field label="Title">
+          <Input value={noteTitle} onChange={(event) => setNoteTitle(event.target.value)} placeholder="Insurance renewal" />
+        </Field>
+        <Field label="Content">
+          <Textarea
+            value={noteContent}
+            onChange={(event) => setNoteContent(event.target.value)}
+            placeholder="What do you need to remember?"
+            rows={5}
+          />
+        </Field>
+        <Button className="w-full" onClick={createNote}>
+          Save note
         </Button>
       </TabsContent>
       <TabsContent value="udhar">

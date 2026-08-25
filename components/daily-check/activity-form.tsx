@@ -27,6 +27,18 @@ import { activitySchema, type ActivityValues } from "@/lib/validations";
 import { todayISO } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
 import type { Activity, Category, ServiceProvider } from "@/types";
+import { useAuth } from "@/hooks/use-auth";
+import { CurrencyDisplay } from "@/components/shared/currency-display";
+import {
+  activityQuantity,
+  activityUnitPrice,
+  calculateActivityAmount,
+  formatQuantityWithUnit,
+  occurrencePeriodLabel,
+  pricingLabel,
+  singularUnit,
+  usesQuantity,
+} from "@/lib/finance/activity-calculations";
 
 const NONE = "__none";
 
@@ -50,6 +62,8 @@ export function ActivityForm({
   onSubmit: (values: ActivityValues) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { profile } = useAuth();
+  const currency = profile?.currency ?? "INR";
   const expenseCategories = categories.filter((item) => item.kind === "expense");
   const form = useForm<ActivityValues>({
     resolver: zodResolver(activitySchema),
@@ -107,6 +121,22 @@ export function ActivityForm({
   const frequency = form.watch("frequency");
   const pricingType = form.watch("pricingType");
   const days = form.watch("activeDays") ?? [];
+  const amount = form.watch("amount") || 0;
+  const unit = form.watch("unit") ?? "";
+  const defaultQuantity = form.watch("defaultQuantity") || 0;
+  const previewActivity = {
+    pricingType,
+    amount,
+    unit,
+    defaultQuantity,
+    frequency,
+  };
+  const quantityBased = usesQuantity(previewActivity);
+  const period = occurrencePeriodLabel(previewActivity);
+  const unitName = pricingLabel(previewActivity);
+  const previewTotal = quantityBased
+    ? calculateActivityAmount({ unitPrice: activityUnitPrice(previewActivity), quantity: activityQuantity(previewActivity) })
+    : activityUnitPrice(previewActivity);
 
   useEffect(() => {
     if (frequency === "daily" || frequency === "weekdays" || frequency === "weekends") {
@@ -203,21 +233,51 @@ export function ActivityForm({
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Amount" error={form.formState.errors.amount?.message}>
-          <MoneyInput value={form.watch("amount")} onChange={(value) => form.setValue("amount", value, { shouldValidate: true })} />
+        <Field
+          label={
+            pricingType === "weekly"
+              ? "Weekly amount"
+              : pricingType === "monthly"
+                ? "Monthly amount"
+                : "Price per unit"
+          }
+          error={form.formState.errors.amount?.message}
+        >
+          <MoneyInput
+            currency={currency}
+            value={form.watch("amount")}
+            onChange={(value) => form.setValue("amount", value, { shouldValidate: true })}
+          />
         </Field>
         <Field label="Unit">
-          <Input {...form.register("unit")} placeholder="day, litre, visit" />
+          <Input {...form.register("unit")} placeholder="liter, visit, day" />
         </Field>
-        <Field label="Default quantity">
+        <Field label={pricingType === "daily" ? "Quantity per day" : "Quantity"} error={form.formState.errors.defaultQuantity?.message}>
           <Input
             type="number"
-            min={0}
-            step="0.1"
+            min={0.01}
+            step="any"
             {...form.register("defaultQuantity", { valueAsNumber: true })}
           />
         </Field>
       </div>
+
+      {amount > 0 ? (
+        <p className="rounded-md bg-muted/60 px-3 py-2 text-sm leading-relaxed">
+          {quantityBased ? (
+            <>
+              <CurrencyDisplay amount={amount} currency={currency} className="text-sm" />/{unitName} ×{" "}
+              {formatQuantityWithUnit(defaultQuantity || 0, unit, unitName)}
+              <span className="text-muted-foreground"> = </span>
+              <CurrencyDisplay amount={previewTotal} currency={currency} className="text-sm font-medium" />/{period}
+            </>
+          ) : (
+            <>
+              <CurrencyDisplay amount={amount} currency={currency} className="text-sm font-medium" />/{singularUnit(unit, unitName)}
+            </>
+          )}
+        </p>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Frequency">

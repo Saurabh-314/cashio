@@ -21,6 +21,8 @@ import {
 import { lastNMonthsRange, monthRange, previousMonthRange, yearRange } from "@/lib/utils/dates";
 import { formatMoney } from "@/lib/finance/money";
 import { udharMonthlySeries, udharTotals } from "@/lib/finance/udhar";
+import { formatQuantityWithUnit, monthSummary, usesQuantity } from "@/lib/finance/activity-calculations";
+import { ActivityUnitPriceText } from "@/components/daily-check/activity-pricing";
 
 const IncomeExpenseChart = dynamic(
   () => import("@/components/charts/finance-charts").then((mod) => mod.IncomeExpenseChart),
@@ -46,7 +48,7 @@ const PRESETS = [
 
 export function ReportsView() {
   const { profile } = useAuth();
-  const { transactions, categories, accounts, budgets, investments, loans, udhars, udharRepayments } = useFinance();
+  const { transactions, categories, accounts, budgets, investments, loans, udhars, udharRepayments, activities, activityRecords } = useFinance();
   const [preset, setPreset] = useState<(typeof PRESETS)[number]["id"]>("this");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -276,6 +278,43 @@ export function ReportsView() {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardHeader>
+          <CardTitle>Daily Check</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {activities.filter((item) => item.status !== "archived").length ? (
+            activities
+              .filter((item) => item.status !== "archived")
+              .map((activity) => {
+                const summary = monthSummary(activity, activityRecords, range.end.slice(0, 7));
+                if (summary.expectedDays <= 0 && summary.amount <= 0) return null;
+                const avgQty = summary.completedDays > 0 ? summary.quantity / summary.completedDays : activity.defaultQuantity;
+                return (
+                  <div key={activity.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-medium">{activity.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Unit price <ActivityUnitPriceText activity={activity} currency={currency} className="text-xs" />
+                        {usesQuantity(activity) ? (
+                          <>
+                            {" · "}Average quantity {formatQuantityWithUnit(avgQty, activity.unit)}
+                            /day
+                          </>
+                        ) : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{summary.completedDays} completed days</p>
+                    </div>
+                    <CurrencyDisplay amount={summary.amount} currency={currency} className="text-sm font-medium" />
+                  </div>
+                );
+              })
+          ) : (
+            <p className="text-sm text-muted-foreground">No Daily Check activities in this range.</p>
+          )}
         </CardContent>
       </Card>
     </div>

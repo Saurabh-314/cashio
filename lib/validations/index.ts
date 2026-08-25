@@ -172,9 +172,9 @@ export const activitySchema = z.object({
   providerPhone: z.string().optional(),
   providerNotes: z.string().optional(),
   pricingType: z.enum(["daily", "weekly", "monthly", "per_visit", "per_unit", "custom"]),
-  amount: z.number().positive("Enter an amount"),
+  amount: z.number().positive("Enter a price greater than 0"),
   unit: z.string().optional(),
-  defaultQuantity: z.number().min(0),
+  defaultQuantity: z.number().positive("Enter a quantity greater than 0"),
   frequency: z.enum([
     "daily",
     "weekdays",
@@ -290,6 +290,29 @@ export const personNoteSchema = z.object({
   body: z.string().min(1, "Write a note"),
 });
 
+export const noteSchema = z.object({
+  title: z.string().min(1, "Enter a title"),
+  content: z.string().optional(),
+  categoryId: z.string().optional(),
+  tags: z.string().optional(),
+  reminderAt: z.string().optional(),
+  isPinned: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
+  relatedType: z
+    .enum(["none", "transaction", "account", "activity", "provider", "bill", "goal", "loan"])
+    .optional(),
+  relatedId: z.string().optional(),
+});
+
+export const noteCategorySchema = z.object({
+  name: z.string().min(1, "Enter a category name"),
+});
+
+export const quickNoteSchema = z.object({
+  title: z.string().min(1, "Enter a title"),
+  content: z.string().optional(),
+});
+
 export type ActivityValues = z.infer<typeof activitySchema>;
 export type ProviderValues = z.infer<typeof providerSchema>;
 export type PauseValues = z.infer<typeof pauseSchema>;
@@ -297,3 +320,6 @@ export type PersonValues = z.infer<typeof personSchema>;
 export type UdharValues = z.infer<typeof udharSchema>;
 export type RepaymentValues = z.infer<typeof repaymentSchema>;
 export type PersonNoteValues = z.infer<typeof personNoteSchema>;
+export type NoteValues = z.infer<typeof noteSchema>;
+export type NoteCategoryValues = z.infer<typeof noteCategorySchema>;
+export type QuickNoteValues = z.infer<typeof quickNoteSchema>;

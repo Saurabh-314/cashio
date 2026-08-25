@@ -2,6 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Custom session auth (not Firebase Auth) means request.auth is unavailable.
+    // Files are namespaced by users/{userId} and notes live under
+    // users/{userId}/notes/{noteId}/ so they are not mixed across accounts.
+    // Download URLs are tokenized; objects are not listed as public.
+    match /users/{userId}/notes/{noteId}/{fileName} {
+      allow read, delete: if true;
+      allow create, update: if request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*|application/pdf|application/msword|application/vnd\\..*|text/plain|application/rtf');
+    }
+
     match /users/{userId}/{allPaths=**} {
       allow read, delete: if true;
       allow create, update: if request.resource.size < 10 * 1024 * 1024;

@@ -110,35 +110,147 @@ export function monthBounds(month: string): { start: string; end: string } {
   };
 }
 
+const PERIOD_UNITS = new Set(["day", "days", "week", "weeks", "month", "months"]);
+const INVARIANT_UNITS = new Set(["kg", "g", "mg", "ml", "l", "km", "m", "cm"]);
+const UNIT_PLURALS: Record<string, string> = {
+  liter: "liters",
+  litre: "litres",
+  bottle: "bottles",
+  piece: "pieces",
+  visit: "visits",
+  can: "cans",
+  packet: "packets",
+  bag: "bags",
+  box: "boxes",
+  dozen: "dozen",
+  unit: "units",
+  day: "days",
+  week: "weeks",
+  month: "months",
+};
+
+export function calculateActivityAmount({
+  unitPrice,
+  quantity,
+}: {
+  unitPrice: number;
+  quantity: number;
+}): number {
+  const price = Number.isFinite(unitPrice) ? unitPrice : 0;
+  const qty = Number.isFinite(quantity) ? quantity : 0;
+  if (price <= 0 || qty <= 0) return 0;
+  return roundMoney(price * qty);
+}
+
+export function calculateActivityPeriodAmount({
+  unitPrice,
+  quantity,
+  occurrences,
+}: {
+  unitPrice: number;
+  quantity: number;
+  occurrences: number;
+}): number {
+  const count = Number.isFinite(occurrences) ? occurrences : 0;
+  if (count <= 0) return 0;
+  return roundMoney(calculateActivityAmount({ unitPrice, quantity }) * count);
+}
+
+export function activityUnitPrice(activity: Pick<Activity, "amount">): number {
+  return Number.isFinite(activity.amount) ? activity.amount : 0;
+}
+
+export function activityQuantity(
+  activity: Pick<Activity, "defaultQuantity">,
+  quantity?: number,
+): number {
+  const qty = quantity ?? activity.defaultQuantity ?? 1;
+  return Number.isFinite(qty) && qty > 0 ? qty : 0;
+}
+
+export function usesQuantity(
+  activity: Pick<Activity, "pricingType" | "defaultQuantity" | "unit">,
+): boolean {
+  if (activity.pricingType === "per_unit" || activity.pricingType === "per_visit" || activity.pricingType === "custom") {
+    return true;
+  }
+  if (activity.pricingType === "weekly" || activity.pricingType === "monthly") return false;
+  const qty = activity.defaultQuantity ?? 1;
+  const unit = (activity.unit ?? "").trim().toLowerCase();
+  if (qty !== 1) return true;
+  return Boolean(unit) && !PERIOD_UNITS.has(unit);
+}
+
+export function singularUnit(unit?: string, fallback = "unit"): string {
+  const raw = (unit ?? "").trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (INVARIANT_UNITS.has(lower)) return lower;
+  const fromPlural = Object.entries(UNIT_PLURALS).find(([, plural]) => plural === lower);
+  if (fromPlural) return fromPlural[0];
+  if (lower.endsWith("s") && UNIT_PLURALS[lower.slice(0, -1)]) return lower.slice(0, -1);
+  return raw;
+}
+
+export function pluralUnit(unit?: string, fallback = "unit"): string {
+  const singular = singularUnit(unit, fallback);
+  const key = singular.toLowerCase();
+  if (INVARIANT_UNITS.has(key) || key === "dozen") return singular;
+  return UNIT_PLURALS[key] ?? (key.endsWith("s") ? singular : `${singular}s`);
+}
+
+export function formatQuantityNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  const rounded = roundMoney(value);
+  if (Number.isInteger(rounded)) return String(rounded);
+  return String(Number(rounded.toFixed(2)));
+}
+
+export function formatQuantityWithUnit(quantity: number, unit?: string, fallback = "unit"): string {
+  const label = quantity === 1 ? singularUnit(unit, fallback) : pluralUnit(unit, fallback);
+  return `${formatQuantityNumber(quantity)} ${label}`;
+}
+
+export function occurrencePeriodLabel(activity: Pick<Activity, "pricingType" | "frequency">): string {
+  if (activity.pricingType === "weekly") return "week";
+  if (activity.pricingType === "monthly") return "month";
+  if (activity.frequency === "weekly" || activity.frequency === "biweekly") return "week";
+  if (activity.frequency === "monthly" || activity.frequency === "quarterly") return "month";
+  return "day";
+}
+
 export function recordAmount(activity: Activity, quantity: number, month: string): number {
-  const qty = Math.max(0, quantity || activity.defaultQuantity || 1);
+  const qty = activityQuantity(activity, quantity);
   const { start, end } = monthBounds(month);
   const expected = expectedDatesInRange(activity, start, end).length;
+  const unitPrice = activityUnitPrice(activity);
 
   switch (activity.pricingType) {
-    case "daily":
-    case "per_visit":
-    case "per_unit":
-    case "custom":
-      return roundMoney(activity.amount * qty);
     case "weekly":
       return 0;
     case "monthly":
       if (activity.frequency === "monthly" || activity.frequency === "quarterly") {
-        return roundMoney(activity.amount);
+        return roundMoney(unitPrice);
       }
-      return expected > 0 ? roundMoney(activity.amount / expected) : 0;
+      return expected > 0 ? roundMoney(unitPrice / expected) : 0;
+    case "daily":
+    case "per_visit":
+    case "per_unit":
+    case "custom":
     default:
-      return roundMoney(activity.amount * qty);
+      return usesQuantity(activity)
+        ? calculateActivityAmount({ unitPrice, quantity: qty })
+        : roundMoney(unitPrice);
   }
 }
 
 export function occurrenceAmount(activity: Activity, quantity?: number): number {
-  const qty = Math.max(0, quantity ?? activity.defaultQuantity ?? 1);
+  const unitPrice = activityUnitPrice(activity);
   if (activity.pricingType === "weekly" || activity.pricingType === "monthly") {
-    return roundMoney(activity.amount);
+    return roundMoney(unitPrice);
   }
-  return roundMoney(activity.amount * qty);
+  if (!usesQuantity(activity)) return roundMoney(unitPrice);
+  return calculateActivityAmount({ unitPrice, quantity: activityQuantity(activity, quantity) });
 }
 
 export function recordsForActivity(
@@ -236,6 +348,11 @@ export function monthSummary(
   };
 }
 
+function recordUnitPrice(record: ActivityRecord, activity: Activity): number {
+  if (typeof record.unitPrice === "number" && record.unitPrice > 0) return record.unitPrice;
+  return activityUnitPrice(activity);
+}
+
 function monthAmount(
   activity: Activity,
   monthRecords: ActivityRecord[],
@@ -244,24 +361,36 @@ function monthAmount(
   quantity: number,
 ): number {
   const completed = monthRecords.filter((item) => item.status === "completed");
+  const unitPrice = activityUnitPrice(activity);
   switch (activity.pricingType) {
     case "daily":
     case "per_visit":
     case "per_unit":
-    case "custom":
-      return roundMoney(activity.amount * quantity);
+    case "custom": {
+      if (completed.length) {
+        return roundMoney(
+          completed.reduce((sum, item) => {
+            if (item.calculatedAmount > 0) return sum + item.calculatedAmount;
+            const qty = item.quantity || activity.defaultQuantity || 1;
+            return sum + calculateActivityAmount({ unitPrice: recordUnitPrice(item, activity), quantity: qty });
+          }, 0),
+        );
+      }
+      if (!usesQuantity(activity)) return roundMoney(unitPrice * completedDays);
+      return calculateActivityAmount({ unitPrice, quantity });
+    }
     case "weekly": {
       const weeks = new Set(
         completed.map((item) => `${getYear(dateObj(item.date))}-${getISOWeek(dateObj(item.date))}`),
       );
-      return roundMoney(activity.amount * weeks.size);
+      return roundMoney(unitPrice * weeks.size);
     }
     case "monthly":
       if (activity.frequency === "monthly" || activity.frequency === "quarterly") {
-        return completedDays > 0 || expectedDays > 0 ? roundMoney(activity.amount) : 0;
+        return completedDays > 0 || expectedDays > 0 ? roundMoney(unitPrice) : 0;
       }
       if (expectedDays <= 0) return 0;
-      return roundMoney((activity.amount / expectedDays) * completedDays);
+      return roundMoney((unitPrice / expectedDays) * completedDays);
     default:
       return roundMoney(completed.reduce((sum, item) => sum + item.calculatedAmount, 0));
   }
@@ -427,10 +556,9 @@ export function formatSchedule(activity: Activity): string {
   return ordered.map((day) => day.short).join(" · ");
 }
 
-export function pricingLabel(activity: Activity): string {
-  const unit =
-    activity.unit ||
-    (activity.pricingType === "daily"
+export function pricingLabel(activity: Pick<Activity, "pricingType" | "unit">): string {
+  const fallback =
+    activity.pricingType === "daily"
       ? "day"
       : activity.pricingType === "weekly"
         ? "week"
@@ -438,8 +566,8 @@ export function pricingLabel(activity: Activity): string {
           ? "month"
           : activity.pricingType === "per_visit"
             ? "visit"
-            : activity.unit || "unit");
-  return `${unit}`;
+            : "unit";
+  return singularUnit(activity.unit, fallback);
 }
 
 export function remainingDue(settlement: Pick<ActivitySettlement, "amount" | "paidAmount">): number {
