@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cashio
 
-## Getting Started
+Personal money management for bank accounts, cash, credit cards, budgets, goals, bills, loans, and net worth.
 
-First, run the development server:
+## Stack
+
+- Next.js App Router + TypeScript
+- Tailwind CSS + shadcn/ui
+- Cloud Firestore and Storage
+- Email/password accounts stored in a Firestore `appUsers` table with hashed passwords
+- Recharts, React Hook Form, Zod, date-fns
+
+## Setup
+
+1. Copy environment variables:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Create a Firebase project and enable Cloud Firestore and Storage. Do not use Firebase Authentication.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Paste the Firebase web app config into `.env.local`, and set `AUTH_SECRET` and `AUTH_PEPPER`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Deploy security rules from `firebase/`:
 
-## Learn More
+```bash
+firebase deploy --only firestore:rules,storage
+```
 
-To learn more about Next.js, take a look at the following resources:
+5. Install and run:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open [http://localhost:3000](http://localhost:3000). New users land on onboarding, then `/dashboard`.
 
-## Deploy on Vercel
+## Notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Do not commit `.env.local`.
+- Transfers and credit-card payments are not treated as expenses.
+- Demo seed data is available from Settings in development only.
+- Deploy to Vercel with the same `NEXT_PUBLIC_FIREBASE_*` environment variables.
