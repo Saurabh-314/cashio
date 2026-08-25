@@ -44,7 +44,7 @@ export function CalendarView() {
       push(item.nextRunDate, item.description, item.type === "income" ? "income" : "expense");
     }
     for (const tx of transactions) {
-      if (tx.type === "income") push(tx.date, tx.description, "income");
+      if (tx.type === "income" && !tx.udharId) push(tx.date, tx.description, "income");
     }
     for (const account of accounts.filter((item) => item.kind === "credit")) {
       if (!account.paymentDueDay) continue;

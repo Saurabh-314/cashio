@@ -33,6 +33,7 @@ export const DEFAULT_WIDGETS: DashboardWidgets = {
   creditCards: true,
   dailyCheck: true,
   pendingSettlements: true,
+  peopleUdhar: true,
 };
 
 export const DEFAULT_NOTIFICATIONS: NotificationPrefs = {
@@ -42,6 +43,7 @@ export const DEFAULT_NOTIFICATIONS: NotificationPrefs = {
   recurring: true,
   dailyCheck: true,
   settlements: true,
+  udhar: true,
 };
 
 export async function createUserProfile(

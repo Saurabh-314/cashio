@@ -35,13 +35,60 @@ export function creditUtilization(account: Account): number {
   return roundMoney(((account.outstanding ?? 0) / account.creditLimit) * 100);
 }
 
+export function isUdharTransaction(tx: Pick<Transaction, "type" | "udharId">) {
+  return tx.type === "udhar" || Boolean(tx.udharId);
+}
+
+export function isUdharInflow(
+  tx: Pick<Transaction, "type" | "udharKind" | "udharId" | "repaymentId">,
+): boolean {
+  if (tx.udharKind === "borrowed" || tx.udharKind === "repayment_received") return true;
+  if (tx.udharKind === "lent" || tx.udharKind === "repayment_made") return false;
+  return tx.type === "income";
+}
+
+export function transactionTypeLabel(tx: Pick<Transaction, "type" | "udharId" | "udharKind" | "repaymentId">) {
+  if (isUdharTransaction(tx)) {
+    if (tx.udharKind === "lent") return "Lent";
+    if (tx.udharKind === "borrowed") return "Borrowed";
+    if (tx.udharKind === "repayment_received") return "Payment received";
+    if (tx.udharKind === "repayment_made") return "Payment made";
+    if (tx.repaymentId) return tx.type === "expense" ? "Payment made" : "Payment received";
+    return tx.type === "expense" ? "Lent" : "Borrowed";
+  }
+  if (tx.type === "income") return "Income";
+  if (tx.type === "expense") return "Expense";
+  if (tx.type === "transfer") return "Transfer";
+  return "People & Udhar";
+}
+
+export function signedTransactionAmount(tx: Pick<Transaction, "type" | "amount" | "udharId" | "udharKind" | "repaymentId">) {
+  if (tx.type === "transfer") return tx.amount;
+  if (isUdharTransaction(tx)) return isUdharInflow(tx) ? tx.amount : -tx.amount;
+  return tx.type === "expense" ? -tx.amount : tx.amount;
+}
+
+export function transactionAmountTone(
+  tx: Pick<Transaction, "type" | "udharId" | "udharKind" | "repaymentId">,
+): "income" | "expense" | "neutral" {
+  if (tx.type === "transfer") return "neutral";
+  if (isUdharTransaction(tx)) return isUdharInflow(tx) ? "income" : "expense";
+  return tx.type === "income" ? "income" : tx.type === "expense" ? "expense" : "neutral";
+}
+
 export function reportExpenseAmount(tx: Transaction): number {
+  if (isUdharTransaction(tx)) {
+    return isUdharInflow(tx) ? 0 : tx.interestAmount ?? 0;
+  }
   if (tx.type !== "expense") return 0;
   if (tx.loanId && tx.interestAmount != null) return tx.interestAmount;
   return tx.amount;
 }
 
 export function reportIncomeAmount(tx: Transaction): number {
+  if (isUdharTransaction(tx)) {
+    return isUdharInflow(tx) ? tx.interestAmount ?? 0 : 0;
+  }
   if (tx.type !== "income") return 0;
   return tx.amount;
 }
@@ -55,6 +102,9 @@ export function transactionDeltas(
     | "fromAccountId"
     | "toAccountId"
     | "principalAmount"
+    | "udharId"
+    | "udharKind"
+    | "repaymentId"
   >,
   accountsById: Map<string, Account>,
 ): BalanceDelta[] {
@@ -65,23 +115,27 @@ export function transactionDeltas(
     deltas.push({ accountId, balanceDelta, outstandingDelta });
   };
 
-  if (tx.type === "income") {
+  const applySingleAccount = (inflow: boolean) => {
     const account = tx.accountId ? accountsById.get(tx.accountId) : undefined;
     if (isCredit(account)) {
-      push(tx.accountId, 0, -tx.amount);
+      push(tx.accountId, 0, inflow ? -tx.amount : tx.amount);
     } else {
-      push(tx.accountId, tx.amount, 0);
+      push(tx.accountId, inflow ? tx.amount : -tx.amount, 0);
     }
+  };
+
+  if (tx.type === "udhar" || (tx.type !== "transfer" && tx.udharId)) {
+    applySingleAccount(isUdharInflow(tx));
+    return deltas;
+  }
+
+  if (tx.type === "income") {
+    applySingleAccount(true);
     return deltas;
   }
 
   if (tx.type === "expense") {
-    const account = tx.accountId ? accountsById.get(tx.accountId) : undefined;
-    if (isCredit(account)) {
-      push(tx.accountId, 0, tx.amount);
-    } else {
-      push(tx.accountId, -tx.amount, 0);
-    }
+    applySingleAccount(false);
     return deltas;
   }
 
@@ -161,7 +215,12 @@ export function totalLiquidBalance(accounts: Account[]): number {
   );
 }
 
-export function totalAssets(accounts: Account[], investments: Investment[], loans: Loan[]): number {
+export function totalAssets(
+  accounts: Account[],
+  investments: Investment[],
+  loans: Loan[],
+  receivable = 0,
+): number {
   const accountAssets = accounts
     .filter((account) => !account.archived && isAssetAccount(account))
     .reduce((sum, account) => sum + account.currentBalance, 0);
@@ -169,21 +228,29 @@ export function totalAssets(accounts: Account[], investments: Investment[], loan
   const moneyLent = loans
     .filter((loan) => loan.loanType === "lent")
     .reduce((sum, loan) => sum + loan.remainingAmount, 0);
-  return roundMoney(accountAssets + investmentValue + moneyLent);
+  return roundMoney(accountAssets + investmentValue + moneyLent + receivable);
 }
 
-export function totalLiabilities(accounts: Account[], loans: Loan[]): number {
+export function totalLiabilities(accounts: Account[], loans: Loan[], payable = 0): number {
   const credit = accounts
     .filter((account) => !account.archived && account.kind === "credit")
     .reduce((sum, account) => sum + account.outstanding, 0);
   const debt = loans
     .filter((loan) => loan.loanType !== "lent")
     .reduce((sum, loan) => sum + loan.remainingAmount, 0);
-  return roundMoney(credit + debt);
+  return roundMoney(credit + debt + payable);
 }
 
-export function netWorth(accounts: Account[], investments: Investment[], loans: Loan[]): number {
-  return roundMoney(totalAssets(accounts, investments, loans) - totalLiabilities(accounts, loans));
+export function netWorth(
+  accounts: Account[],
+  investments: Investment[],
+  loans: Loan[],
+  receivable = 0,
+  payable = 0,
+): number {
+  return roundMoney(
+    totalAssets(accounts, investments, loans, receivable) - totalLiabilities(accounts, loans, payable),
+  );
 }
 
 export function periodTotals(transactions: Transaction[], start: string, end: string) {

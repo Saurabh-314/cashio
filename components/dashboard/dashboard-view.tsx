@@ -38,6 +38,13 @@ import {
 import { CheckStatusBadge } from "@/components/daily-check/status-badge";
 import { lastNMonthsRange, monthKey, monthRange, previousMonthRange, todayISO, yearRange, greeting } from "@/lib/utils/dates";
 import { daysUntil } from "@/lib/utils/dates";
+import {
+  dueLabel,
+  isOpenUdhar,
+  liveUdhars,
+  peopleBalances,
+  udharTotals,
+} from "@/lib/finance/udhar";
 import { Wallet } from "lucide-react";
 import { format } from "date-fns";
 
@@ -63,7 +70,7 @@ const RANGE_OPTIONS = [
 
 export function DashboardView() {
   const { profile } = useAuth();
-  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, openQuickAdd } =
+  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, people, udhars, udharRepayments, openQuickAdd } =
     useFinance();
   const router = useRouter();
   const [rangeId, setRangeId] = useState<(typeof RANGE_OPTIONS)[number]["id"]>("6m");
@@ -113,9 +120,16 @@ export function DashboardView() {
           const existing = settlements.find((item) => item.activityId === activity.id && item.month === monthKey());
           return sum + previewSettlement(activity, activityRecords, monthKey(), existing).due;
         }, 0),
+      overdueUdhar: liveUdhars(udhars, udharRepayments)
+        .filter((item) => item.status === "overdue")
+        .map((item) => ({
+          name: people.find((row) => row.id === item.personId)?.name ?? "Someone",
+          amount: item.outstandingAmount,
+          days: Math.abs(daysUntil(item.dueDate ?? todayISO())),
+        })),
     });
     return { currentRange, current, previous, series, spend, insights };
-  }, [accounts, activities, activityRecords, bills, budgets, categories, currency, goals, monthStartDay, rangeId, settlements, transactions]);
+  }, [accounts, activities, activityRecords, bills, budgets, categories, currency, goals, monthStartDay, people, rangeId, settlements, transactions, udharRepayments, udhars]);
 
   if (loading) return <DashboardSkeleton />;
 
@@ -133,7 +147,8 @@ export function DashboardView() {
 
   const show = (key: keyof NonNullable<typeof widgets>) => widgets?.[key] !== false;
   const liquid = totalLiquidBalance(accounts);
-  const worth = netWorth(accounts, investments, loans);
+  const peopleTotals = udharTotals(udhars, udharRepayments);
+  const worth = netWorth(accounts, investments, loans, peopleTotals.theyOwe, peopleTotals.youOwe);
   const cards = accounts.filter((item) => item.kind === "credit" && !item.archived);
   const month = monthKey();
   const liveActivities = activities.filter((item) => item.status !== "archived");
@@ -190,8 +205,83 @@ export function DashboardView() {
             tone={data.current.savings >= 0 ? "income" : "expense"}
           />
         ) : null}
-        {show("netWorth") ? <MoneyCard label="Net worth" amount={worth} currency={currency} /> : null}
+          {show("netWorth") ? <MoneyCard label="Net worth" amount={worth} currency={currency} /> : null}
       </div>
+
+      {show("peopleUdhar") ? (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>People & Udhar</CardTitle>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" asChild>
+                <Link href="/people">View all</Link>
+              </Button>
+              <Button size="sm" onClick={() => openQuickAdd("udhar")}>
+                + Add Udhar
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">They owe you</p>
+                <CurrencyDisplay amount={peopleTotals.theyOwe} currency={currency} className="text-lg font-semibold" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">You owe</p>
+                <CurrencyDisplay amount={peopleTotals.youOwe} currency={currency} className="text-lg font-semibold" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Net</p>
+                <CurrencyDisplay amount={Math.abs(peopleTotals.net)} currency={currency} className="text-lg font-semibold" />
+                <p className="text-[11px] text-muted-foreground">
+                  {peopleTotals.net === 0 ? "Even" : peopleTotals.net > 0 ? "They owe you more" : "You owe more"}
+                </p>
+              </div>
+            </div>
+            {peopleBalances(people, udhars, udharRepayments)
+              .filter((row) => row.balance.theyOwe > 0 || row.balance.youOwe > 0)
+              .sort((a, b) => Math.abs(b.balance.net) - Math.abs(a.balance.net))
+              .slice(0, 5)
+              .map(({ person, balance }) => (
+                <Link key={person.id} href={`/people/${person.id}`} className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">{person.name}</p>
+                  <p className="text-sm tabular-nums">
+                    {balance.net >= 0 ? (
+                      <CurrencyDisplay amount={balance.theyOwe || balance.net} currency={currency} className="text-sm" />
+                    ) : (
+                      <CurrencyDisplay amount={balance.youOwe} currency={currency} className="text-sm" />
+                    )}
+                    <span className="ml-2 text-xs text-muted-foreground">{balance.net >= 0 ? "→" : "←"}</span>
+                  </p>
+                </Link>
+              ))}
+            {liveUdhars(udhars, udharRepayments).some((item) => isOpenUdhar(item) && item.dueDate) ? (
+              <div className="space-y-2 border-t pt-3">
+                {liveUdhars(udhars, udharRepayments)
+                  .filter((item) => isOpenUdhar(item) && item.dueDate)
+                  .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""))
+                  .slice(0, 4)
+                  .map((item) => {
+                    const name = people.find((row) => row.id === item.personId)?.name ?? "Someone";
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm">{name}</p>
+                          <p className="text-xs text-muted-foreground">{dueLabel(item.dueDate)}</p>
+                        </div>
+                        <CurrencyDisplay amount={item.outstandingAmount} currency={currency} className="text-sm font-medium" />
+                      </div>
+                    );
+                  })}
+              </div>
+            ) : null}
+            {!people.length ? (
+              <p className="text-sm text-muted-foreground">Add informal lending and borrowing with people you know.</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

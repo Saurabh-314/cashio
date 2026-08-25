@@ -7,6 +7,7 @@ import {
   updateDoc,
   where,
   writeBatch,
+  type WriteBatch,
 } from "firebase/firestore";
 import { getDb } from "@/lib/firebase/client";
 import { applyDeltas, invertDeltas, transactionDeltas } from "@/lib/finance/calculations";
@@ -15,6 +16,14 @@ import type { Account, Attachment, Transaction } from "@/types";
 
 export type TransactionInput = Omit<Transaction, "id" | "createdAt" | "updatedAt" | "attachments"> & {
   attachments?: Attachment[];
+};
+
+export type TransactionExtras = {
+  loanRemainingDelta?: number;
+  goalDelta?: number;
+  goalId?: string;
+  loanId?: string;
+  additional?: (batch: WriteBatch, txId: string) => void;
 };
 
 function accountsById(accounts: Account[]) {
@@ -44,7 +53,7 @@ export async function createTransaction(
   uid: string,
   accounts: Account[],
   input: TransactionInput,
-  extras?: { loanRemainingDelta?: number; goalDelta?: number; goalId?: string; loanId?: string },
+  extras?: TransactionExtras,
 ): Promise<string> {
   const to = accounts.find((account) => account.id === input.toAccountId);
   const payload = stripUndefined({
@@ -60,20 +69,21 @@ export async function createTransaction(
   const txRef = doc(col(uid, "transactions"));
   batch.set(txRef, payload);
 
-  if (extras?.loanId && extras.loanRemainingDelta) {
+  if (extras?.loanId && extras.loanRemainingDelta != null) {
     const loan = doc(getDb(), "users", uid, "loans", extras.loanId);
     batch.update(loan, {
       remainingAmount: extras.loanRemainingDelta,
       updatedAt: nowIso(),
     });
   }
-  if (extras?.goalId && extras.goalDelta) {
+  if (extras?.goalId && extras.goalDelta != null) {
     const goal = doc(getDb(), "users", uid, "goals", extras.goalId);
     batch.update(goal, {
       currentAmount: extras.goalDelta,
       updatedAt: nowIso(),
     });
   }
+  extras?.additional?.(batch, txRef.id);
 
   await batch.commit();
   return txRef.id;

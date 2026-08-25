@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { TransactionForm } from "@/components/forms/transaction-form";
+import { UdharForm } from "@/components/people/udhar-form";
 import { Field } from "@/components/forms/field";
 import { MoneyInput } from "@/components/forms/money-input";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,7 @@ function QuickAddBody() {
         <TabsTrigger value="activity">Activity</TabsTrigger>
         <TabsTrigger value="bill">Bill</TabsTrigger>
         <TabsTrigger value="goal">Goal</TabsTrigger>
+        <TabsTrigger value="udhar">Udhar</TabsTrigger>
       </TabsList>
       <TabsContent value="expense">
         <TransactionForm type="expense" onDone={closeQuickAdd} submitLabel="Add expense" />
@@ -146,6 +148,9 @@ function QuickAddBody() {
         <Button className="w-full" onClick={contribute} disabled={!accounts.length}>
           Add contribution
         </Button>
+      </TabsContent>
+      <TabsContent value="udhar">
+        <UdharForm onDone={closeQuickAdd} />
       </TabsContent>
     </Tabs>
   );

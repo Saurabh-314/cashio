@@ -33,6 +33,12 @@ import { useFinance } from "@/hooks/use-finance";
 import { formatDate } from "@/lib/utils/dates";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
+import {
+  isUdharTransaction,
+  signedTransactionAmount,
+  transactionAmountTone,
+  transactionTypeLabel,
+} from "@/lib/finance/calculations";
 import type { Transaction, TransactionType } from "@/types";
 
 export function TransactionsView() {
@@ -52,7 +58,11 @@ export function TransactionsView() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     const next = transactions.filter((tx) => {
-      if (type !== "all" && tx.type !== type) return false;
+      if (type === "udhar") {
+        if (!isUdharTransaction(tx)) return false;
+      } else if (type !== "all") {
+        if (isUdharTransaction(tx) || tx.type !== type) return false;
+      }
       if (accountId !== "all" && tx.accountId !== accountId && tx.fromAccountId !== accountId && tx.toAccountId !== accountId)
         return false;
       if (categoryId !== "all" && tx.categoryId !== categoryId) return false;
@@ -85,6 +95,7 @@ export function TransactionsView() {
           <SelectItem value="expense">Expense</SelectItem>
           <SelectItem value="income">Income</SelectItem>
           <SelectItem value="transfer">Transfer</SelectItem>
+          <SelectItem value="udhar">People & Udhar</SelectItem>
         </SelectContent>
       </Select>
       <Select value={accountId} onValueChange={setAccountId}>
@@ -129,7 +140,7 @@ export function TransactionsView() {
 
   return (
     <div>
-      <PageHeader title="Transactions" description="Income, expenses, and transfers">
+      <PageHeader title="Transactions" description="Income, expenses, transfers, and People & Udhar">
         <Button variant="outline" className="md:hidden" onClick={() => setFiltersOpen(true)}>
           Filters
         </Button>
@@ -165,7 +176,8 @@ export function TransactionsView() {
                   const account = accounts.find(
                     (item) => item.id === tx.accountId || item.id === tx.fromAccountId,
                   );
-                  const signed = tx.type === "expense" ? -tx.amount : tx.amount;
+                  const signed = signedTransactionAmount(tx);
+                  const tone = transactionAmountTone(tx);
                   return (
                     <TableRow
                       key={tx.id}
@@ -179,15 +191,17 @@ export function TransactionsView() {
                         {formatDate(tx.date, profile?.dateFormat)}
                       </TableCell>
                       <TableCell className="font-medium">{tx.description}</TableCell>
-                      <TableCell className="text-muted-foreground">{category?.name ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {isUdharTransaction(tx) ? "People & Udhar" : category?.name ?? "—"}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{account?.name ?? "—"}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{tx.type}</TableCell>
+                      <TableCell className="text-muted-foreground">{transactionTypeLabel(tx)}</TableCell>
                       <TableCell className="text-right">
                         <CurrencyDisplay
                           amount={signed}
                           currency={profile?.currency ?? "INR"}
                           signed={tx.type !== "transfer"}
-                          tone={tx.type === "expense" ? "expense" : tx.type === "income" ? "income" : "neutral"}
+                          tone={tone}
                           className="text-sm font-medium"
                         />
                       </TableCell>
@@ -242,16 +256,23 @@ export function TransactionsView() {
           {selected && !editing ? (
             <div className="space-y-4 px-4 pb-6">
               <CurrencyDisplay
-                amount={selected.type === "expense" ? -selected.amount : selected.amount}
+                amount={signedTransactionAmount(selected)}
                 currency={profile?.currency ?? "INR"}
-                signed
-                tone={selected.type === "expense" ? "expense" : selected.type === "income" ? "income" : "neutral"}
+                signed={selected.type !== "transfer"}
+                tone={transactionAmountTone(selected)}
                 className="text-3xl font-semibold"
               />
               <dl className="space-y-2 text-sm">
-                <Row label="Type" value={selected.type} />
+                <Row label="Type" value={transactionTypeLabel(selected)} />
                 <Row label="Date" value={formatDate(selected.date, profile?.dateFormat)} />
-                <Row label="Category" value={categories.find((item) => item.id === selected.categoryId)?.name ?? "—"} />
+                <Row
+                  label="Category"
+                  value={
+                    isUdharTransaction(selected)
+                      ? "People & Udhar"
+                      : categories.find((item) => item.id === selected.categoryId)?.name ?? "—"
+                  }
+                />
                 <Row
                   label="Account"
                   value={
@@ -264,6 +285,12 @@ export function TransactionsView() {
                 <Row label="Notes" value={selected.notes || "—"} />
                 <Row label="Created" value={formatDate(selected.createdAt.slice(0, 10), profile?.dateFormat)} />
               </dl>
+              {isUdharTransaction(selected) ? (
+                <p className="text-sm text-muted-foreground">
+                  This only moved money between you and a person. It is not income or expense
+                  {selected.interestAmount ? ", except the interest portion." : "."} Manage it from the person page.
+                </p>
+              ) : null}
               {selected.attachments?.length ? (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Attachments</p>
@@ -284,26 +311,34 @@ export function TransactionsView() {
                 </div>
               ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setEditing(true)}>
-                  <Pencil /> Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      await saveTransaction({ ...selected, description: `${selected.description} (copy)` });
-                      toast.success("Duplicated");
-                      setSelected(null);
-                    } catch (error) {
-                      toast.error(getErrorMessage(error));
-                    }
-                  }}
-                >
-                  <Copy /> Duplicate
-                </Button>
-                <Button variant="destructive" onClick={() => setConfirm(true)}>
-                  <Trash2 /> Delete
-                </Button>
+                {isUdharTransaction(selected) ? (
+                  <Button variant="outline" asChild>
+                    <a href={selected.personId ? `/people/${selected.personId}` : "/people"}>Open in People & Udhar</a>
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" onClick={() => setEditing(true)}>
+                      <Pencil /> Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await saveTransaction({ ...selected, description: `${selected.description} (copy)` });
+                          toast.success("Duplicated");
+                          setSelected(null);
+                        } catch (error) {
+                          toast.error(getErrorMessage(error));
+                        }
+                      }}
+                    >
+                      <Copy /> Duplicate
+                    </Button>
+                    <Button variant="destructive" onClick={() => setConfirm(true)}>
+                      <Trash2 /> Delete
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           ) : selected ? (

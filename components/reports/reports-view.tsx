@@ -20,6 +20,7 @@ import {
 } from "@/lib/finance/calculations";
 import { lastNMonthsRange, monthRange, previousMonthRange, yearRange } from "@/lib/utils/dates";
 import { formatMoney } from "@/lib/finance/money";
+import { udharMonthlySeries, udharTotals } from "@/lib/finance/udhar";
 
 const IncomeExpenseChart = dynamic(
   () => import("@/components/charts/finance-charts").then((mod) => mod.IncomeExpenseChart),
@@ -45,7 +46,7 @@ const PRESETS = [
 
 export function ReportsView() {
   const { profile } = useAuth();
-  const { transactions, categories, accounts, budgets, investments, loans } = useFinance();
+  const { transactions, categories, accounts, budgets, investments, loans, udhars, udharRepayments } = useFinance();
   const [preset, setPreset] = useState<(typeof PRESETS)[number]["id"]>("this");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -78,9 +79,11 @@ export function ReportsView() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
 
-  const assets = totalAssets(accounts, investments, loans);
-  const liabilities = totalLiabilities(accounts, loans);
-  const worth = netWorth(accounts, investments, loans);
+  const peopleTotals = udharTotals(udhars, udharRepayments);
+  const assets = totalAssets(accounts, investments, loans, peopleTotals.theyOwe);
+  const liabilities = totalLiabilities(accounts, loans, peopleTotals.youOwe);
+  const worth = netWorth(accounts, investments, loans, peopleTotals.theyOwe, peopleTotals.youOwe);
+  const peopleSeries = udharMonthlySeries(udhars, udharRepayments, range.start, range.end);
 
   return (
     <div className="space-y-6">
@@ -225,6 +228,54 @@ export function ReportsView() {
           <Stat label="Assets" amount={assets} currency={currency} />
           <Stat label="Liabilities" amount={liabilities} currency={currency} />
           <Stat label="Net worth" amount={worth} currency={currency} />
+        </CardContent>
+        <p className="px-5 pb-5 text-xs text-muted-foreground">
+          Assets include money people owe you ({formatMoney(peopleTotals.theyOwe, currency)}). Liabilities include money you owe people ({formatMoney(peopleTotals.youOwe, currency)}).
+        </p>
+      </Card>
+
+      <Card className="rounded-lg">
+        <CardHeader>
+          <CardTitle>People & Udhar</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">Total lent</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.totalLent, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">Total borrowed</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.totalBorrowed, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">They owe you</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.theyOwe, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">You owe</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.youOwe, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">Interest earned</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.interestEarned, currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 sm:block">
+              <dt className="text-muted-foreground">Interest paid</dt>
+              <dd className="tabular-nums font-medium">{formatMoney(peopleTotals.interestPaid, currency)}</dd>
+            </div>
+          </dl>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Monthly lent vs borrowed</p>
+            {peopleSeries.map((row) => (
+              <div key={row.month} className="flex items-center justify-between text-sm">
+                <span>{row.label}</span>
+                <span className="text-muted-foreground">
+                  lent {formatMoney(row.lent, currency)} · borrowed {formatMoney(row.borrowed, currency)}
+                </span>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     </div>

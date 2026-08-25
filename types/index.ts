@@ -27,7 +27,9 @@ export type AccountKind = "bank" | "cash" | "credit" | "investment" | "other_ass
 
 export type BankAccountType = "savings" | "current" | "salary" | "other";
 
-export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionType = "income" | "expense" | "transfer" | "udhar";
+
+export type UdharKind = "lent" | "borrowed" | "repayment_received" | "repayment_made";
 
 export type CategoryKind = "income" | "expense";
 
@@ -84,6 +86,7 @@ export interface DashboardWidgets {
   creditCards: boolean;
   dailyCheck: boolean;
   pendingSettlements: boolean;
+  peopleUdhar: boolean;
 }
 
 export interface NotificationPrefs {
@@ -93,6 +96,7 @@ export interface NotificationPrefs {
   recurring: boolean;
   dailyCheck: boolean;
   settlements: boolean;
+  udhar: boolean;
 }
 
 export interface UserProfile {
@@ -109,6 +113,7 @@ export interface UserProfile {
   widgets: DashboardWidgets;
   notifications: NotificationPrefs;
   reminderTime?: string;
+  udharReminderDays?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -178,6 +183,10 @@ export interface Transaction {
   loanId?: string;
   activityId?: string;
   settlementId?: string;
+  udharId?: string;
+  personId?: string;
+  repaymentId?: string;
+  udharKind?: UdharKind;
   principalAmount?: number;
   interestAmount?: number;
   isCreditCardPayment: boolean;
@@ -286,7 +295,90 @@ export interface Insight {
   tone: "info" | "warning" | "success";
 }
 
-export type QuickAddKind = "expense" | "income" | "transfer" | "bill" | "goal" | "activity";
+export type QuickAddKind = "expense" | "income" | "transfer" | "bill" | "goal" | "activity" | "udhar";
+
+export type PersonRelationship =
+  | "friend"
+  | "family"
+  | "colleague"
+  | "neighbor"
+  | "customer"
+  | "vendor"
+  | "other";
+
+export type UdharType = "lent" | "borrowed";
+
+export type UdharInterestType = "none" | "fixed" | "percentage";
+
+export type UdharStatus = "active" | "partially_paid" | "overdue" | "settled" | "cancelled";
+
+export type UdharPaymentMethod = "cash" | "bank" | "upi" | "card" | "other";
+
+export interface Person {
+  id: string;
+  name: string;
+  phone?: string;
+  relationship?: PersonRelationship;
+  notes?: string;
+  avatarUrl?: string;
+  avatarPath?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Udhar {
+  id: string;
+  personId: string;
+  type: UdharType;
+  principalAmount: number;
+  outstandingPrincipal: number;
+  interestType: UdharInterestType;
+  interestRate?: number;
+  interestAmount: number;
+  outstandingInterest: number;
+  totalAmount: number;
+  outstandingAmount: number;
+  date: string;
+  dueDate?: string | null;
+  status: UdharStatus;
+  accountId: string;
+  notes?: string;
+  reminderDays?: number;
+  remindInDailyCheck?: boolean;
+  followUpDoneOn?: string;
+  attachments: Attachment[];
+  transactionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UdharRepayment {
+  id: string;
+  udharId: string;
+  personId: string;
+  amount: number;
+  principalAmount: number;
+  interestAmount: number;
+  accountId: string;
+  paymentDate: string;
+  paymentMethod: UdharPaymentMethod;
+  notes?: string;
+  attachments: Attachment[];
+  transactionId?: string;
+  isNetOffset?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PersonNote {
+  id: string;
+  personId: string;
+  udharId?: string;
+  repaymentId?: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export type ActivityPricingType = "daily" | "weekly" | "monthly" | "per_visit" | "per_unit" | "custom";
 

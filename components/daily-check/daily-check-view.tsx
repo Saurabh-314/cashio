@@ -43,6 +43,7 @@ import {
 } from "@/lib/finance/activity-calculations";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { monthKey, todayISO } from "@/lib/utils/dates";
+import { dailyCheckFollowUps, dueLabel } from "@/lib/finance/udhar";
 import { providerSchema, type ActivityValues, type ProviderValues } from "@/lib/validations";
 import type { Activity, CurrencyCode, SkipReason } from "@/types";
 
@@ -55,12 +56,16 @@ export function DailyCheckView() {
     settlements,
     accounts,
     categories,
+    people,
+    udhars,
+    udharRepayments,
     saveActivity,
     saveProvider,
     checkIn,
     bulkCheckIn,
     paySettlement,
     removeProvider,
+    dismissUdharFollowUp,
   } = useFinance();
   const currency = profile?.currency ?? "INR";
   const today = todayISO();
@@ -101,6 +106,12 @@ export function DailyCheckView() {
 
   const outstanding = paymentRows.filter((row) => row.status !== "paid");
   const outstandingTotal = outstanding.reduce((sum, row) => sum + row.due, 0);
+  const udharFollowUps = dailyCheckFollowUps(
+    udhars,
+    udharRepayments,
+    today,
+    profile?.udharReminderDays ?? 1,
+  );
 
   async function complete(activityId: string) {
     try {
@@ -260,6 +271,40 @@ export function DailyCheckView() {
                 </p>
               )}
             </div>
+
+            {udharFollowUps.length ? (
+              <Card className="rounded-lg">
+                <CardHeader>
+                  <CardTitle>People follow-ups</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {udharFollowUps.map((item) => {
+                    const person = people.find((row) => row.id === item.personId);
+                    return (
+                      <div key={item.id} className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {person?.name ?? "Someone"} repayment follow-up
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {dueLabel(item.dueDate)} ·{" "}
+                            <CurrencyDisplay amount={item.outstandingAmount} currency={currency} className="text-xs" />
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" asChild>
+                            <Link href={`/people/${item.personId}`}>Open</Link>
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => dismissUdharFollowUp(item.id)}>
+                            Done
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="activities" className="grid gap-3 md:grid-cols-2">

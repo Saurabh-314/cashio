@@ -235,6 +235,65 @@ export type LoanValues = z.infer<typeof loanSchema>;
 export type BillValues = z.infer<typeof billSchema>;
 export type RecurringValues = z.infer<typeof recurringSchema>;
 export type InvestmentValues = z.infer<typeof investmentSchema>;
+export const personSchema = z.object({
+  name: z.string().min(1, "Enter a name"),
+  phone: z.string().optional(),
+  relationship: z
+    .enum(["friend", "family", "colleague", "neighbor", "customer", "vendor", "other"])
+    .optional(),
+  notes: z.string().optional(),
+});
+
+export const udharSchema = z
+  .object({
+    personId: z.string().optional(),
+    newPersonName: z.string().optional(),
+    newPersonPhone: z.string().optional(),
+    newPersonRelationship: z
+      .enum(["friend", "family", "colleague", "neighbor", "customer", "vendor", "other"])
+      .optional(),
+    type: z.enum(["lent", "borrowed"]),
+    principalAmount: z.number().positive("Enter an amount"),
+    date: z.string().min(1, "Choose a date"),
+    dueDate: z.string().optional(),
+    noDueDate: z.boolean().optional(),
+    accountId: z.string().min(1, "Choose an account"),
+    interestType: z.enum(["none", "fixed", "percentage"]),
+    interestAmount: z.number().min(0).optional(),
+    interestRate: z.number().min(0).optional(),
+    notes: z.string().optional(),
+    reminderDays: z.number().min(0).max(30).optional(),
+    remindInDailyCheck: z.boolean().optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((!value.personId || value.personId === "__new__") && !value.newPersonName?.trim()) {
+      ctx.addIssue({ code: "custom", message: "Choose or add a person", path: ["personId"] });
+    }
+    if (value.interestType === "fixed" && !(value.interestAmount && value.interestAmount > 0)) {
+      ctx.addIssue({ code: "custom", message: "Enter the interest amount", path: ["interestAmount"] });
+    }
+    if (value.interestType === "percentage" && !(value.interestRate && value.interestRate > 0)) {
+      ctx.addIssue({ code: "custom", message: "Enter the interest %", path: ["interestRate"] });
+    }
+  });
+
+export const repaymentSchema = z.object({
+  amount: z.number().positive("Enter an amount"),
+  accountId: z.string().min(1, "Choose an account"),
+  paymentDate: z.string().min(1, "Choose a date"),
+  paymentMethod: z.enum(["cash", "bank", "upi", "card", "other"]),
+  notes: z.string().optional(),
+  udharId: z.string().optional(),
+});
+
+export const personNoteSchema = z.object({
+  body: z.string().min(1, "Write a note"),
+});
+
 export type ActivityValues = z.infer<typeof activitySchema>;
 export type ProviderValues = z.infer<typeof providerSchema>;
 export type PauseValues = z.infer<typeof pauseSchema>;
+export type PersonValues = z.infer<typeof personSchema>;
+export type UdharValues = z.infer<typeof udharSchema>;
+export type RepaymentValues = z.infer<typeof repaymentSchema>;
+export type PersonNoteValues = z.infer<typeof personNoteSchema>;

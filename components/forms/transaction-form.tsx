@@ -20,7 +20,9 @@ import { useFinance } from "@/hooks/use-finance";
 import { todayISO } from "@/lib/utils/dates";
 import { transactionSchema, type TransactionValues } from "@/lib/validations";
 import { uploadReceipt } from "@/services/storage";
-import type { Attachment, Transaction, TransactionType } from "@/types";
+import type { Attachment, Transaction } from "@/types";
+
+type FormType = TransactionValues["type"];
 
 export function TransactionForm({
   type,
@@ -28,7 +30,7 @@ export function TransactionForm({
   onDone,
   submitLabel = "Save",
 }: {
-  type?: TransactionType;
+  type?: FormType;
   initial?: Transaction;
   onDone?: () => void;
   submitLabel?: string;
@@ -36,10 +38,14 @@ export function TransactionForm({
   const { user, profile } = useAuth();
   const { accounts, categories, saveTransaction } = useFinance();
   const [attachments, setAttachments] = useState<Attachment[]>(initial?.attachments ?? []);
+  const initialType: FormType =
+    initial?.type === "income" || initial?.type === "expense" || initial?.type === "transfer"
+      ? initial.type
+      : (type ?? "expense");
   const form = useForm<TransactionValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
-      type: initial?.type ?? type ?? "expense",
+      type: initialType,
       amount: initial?.amount ?? 0,
       date: initial?.date ?? todayISO(),
       description: initial?.description ?? "",
@@ -90,7 +96,7 @@ export function TransactionForm({
         <Field label="Type" error={form.formState.errors.type?.message}>
           <Select
             value={form.watch("type")}
-            onValueChange={(value) => form.setValue("type", value as TransactionType)}
+            onValueChange={(value) => form.setValue("type", value as FormType)}
           >
             <SelectTrigger className="w-full">
               <SelectValue />

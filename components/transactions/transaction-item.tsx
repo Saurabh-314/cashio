@@ -3,6 +3,11 @@
 import { Paperclip } from "lucide-react";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  isUdharTransaction,
+  signedTransactionAmount,
+  transactionAmountTone,
+} from "@/lib/finance/calculations";
 import { formatDate } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
 import type { Account, Category, Transaction } from "@/types";
@@ -27,10 +32,15 @@ export function TransactionItem({
       item.id === transaction.toAccountId,
   );
   const to = accounts.find((item) => item.id === transaction.toAccountId);
-  const amountTone =
-    transaction.type === "income" ? "income" : transaction.type === "expense" ? "expense" : "neutral";
-  const signedAmount =
-    transaction.type === "expense" ? -transaction.amount : transaction.type === "income" ? transaction.amount : transaction.amount;
+  const isUdhar = isUdharTransaction(transaction);
+  const amountTone = transactionAmountTone(transaction);
+  const signedAmount = signedTransactionAmount(transaction);
+  const subtitle =
+    transaction.type === "transfer"
+      ? `${account?.name ?? "From"} → ${to?.name ?? "To"}`
+      : isUdhar
+        ? ["People & Udhar", account?.name].filter(Boolean).join(" · ")
+        : [category?.name, account?.name].filter(Boolean).join(" · ");
 
   return (
     <button
@@ -44,9 +54,7 @@ export function TransactionItem({
           {transaction.attachments?.length ? <Paperclip className="size-3 text-muted-foreground" /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {transaction.type === "transfer"
-            ? `${account?.name ?? "From"} → ${to?.name ?? "To"}`
-            : [category?.name, account?.name].filter(Boolean).join(" · ")}
+          {subtitle}
           {" · "}
           {formatDate(transaction.date, profile?.dateFormat)}
         </p>

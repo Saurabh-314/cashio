@@ -60,7 +60,10 @@ export function LoansView() {
 
   return (
     <div>
-      <PageHeader title="Loans & debts" description="Track what you owe and money you've lent">
+      <PageHeader title="Loans" description="Formal loans and EMIs. Informal money with people lives in People & Udhar.">
+        <Button variant="outline" asChild>
+          <a href="/people">People & Udhar</a>
+        </Button>
         <Button onClick={() => setOpen(true)}>Add loan</Button>
       </PageHeader>
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -120,7 +123,7 @@ export function LoansView() {
         <EmptyState
           icon={Landmark}
           title="No loans yet"
-          description="Add a personal loan, EMI, or money lent to someone."
+          description="Add a personal loan, car loan, or home loan. For friends and family, use People & Udhar."
           actionLabel="Add loan"
           onAction={() => setOpen(true)}
         />
@@ -158,7 +161,7 @@ export function LoansView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {["personal", "home", "car", "education", "credit_card", "borrowed", "lent", "other"].map((item) => (
+                  {["personal", "home", "car", "education", "credit_card", "other"].map((item) => (
                     <SelectItem key={item} value={item}>
                       {item.replace("_", " ")}
                     </SelectItem>

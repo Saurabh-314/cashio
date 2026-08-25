@@ -159,14 +159,14 @@ export function SettingsView() {
           <CardTitle>Dashboard widgets</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          {Object.entries(profile?.widgets ?? DEFAULT_WIDGETS).map(([key, enabled]) => (
+          {Object.entries({ ...DEFAULT_WIDGETS, ...(profile?.widgets ?? {}) }).map(([key, enabled]) => (
             <label key={key} className="flex items-center justify-between rounded-2xl border px-3 py-2 text-sm capitalize">
               {key.replace(/([A-Z])/g, " $1")}
               <Switch
                 checked={enabled}
                 onCheckedChange={(checked) =>
                   updateProfile({
-                    widgets: { ...(profile?.widgets ?? DEFAULT_WIDGETS), [key]: checked } as DashboardWidgets,
+                    widgets: { ...DEFAULT_WIDGETS, ...(profile?.widgets ?? {}), [key]: checked } as DashboardWidgets,
                   })
                 }
               />
@@ -180,7 +180,7 @@ export function SettingsView() {
           <CardTitle>Notifications</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          {Object.entries(profile?.notifications ?? DEFAULT_NOTIFICATIONS).map(([key, enabled]) => (
+          {Object.entries({ ...DEFAULT_NOTIFICATIONS, ...(profile?.notifications ?? {}) }).map(([key, enabled]) => (
             <label key={key} className="flex items-center justify-between rounded-2xl border px-3 py-2 text-sm capitalize">
               {key} reminders
               <Switch
@@ -188,12 +188,8 @@ export function SettingsView() {
                 onCheckedChange={(checked) =>
                   updateProfile({
                     notifications: {
-                      bills: profile?.notifications.bills ?? true,
-                      budgets: profile?.notifications.budgets ?? true,
-                      goals: profile?.notifications.goals ?? true,
-                      recurring: profile?.notifications.recurring ?? true,
-                      dailyCheck: profile?.notifications.dailyCheck ?? true,
-                      settlements: profile?.notifications.settlements ?? true,
+                      ...DEFAULT_NOTIFICATIONS,
+                      ...(profile?.notifications ?? {}),
                       [key]: checked,
                     },
                   })
@@ -201,6 +197,22 @@ export function SettingsView() {
               />
             </label>
           ))}
+          <Field label="People & Udhar reminder" className="sm:col-span-2">
+            <Select
+              value={String(profile?.udharReminderDays ?? 1)}
+              onValueChange={(value) => updateProfile({ udharReminderDays: Number(value) })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">On the due date</SelectItem>
+                <SelectItem value="1">1 day before</SelectItem>
+                <SelectItem value="3">3 days before</SelectItem>
+                <SelectItem value="7">7 days before</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Daily Check reminder time" className="sm:col-span-2">
             <Input
               type="time"

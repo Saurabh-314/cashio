@@ -36,6 +36,21 @@ import {
   type TransactionInput,
 } from "@/services/transactions";
 import { createAccount, updateUserProfile } from "@/services/users";
+import {
+  addPersonNote,
+  cancelUdhar,
+  createPersonInline,
+  createUdhar,
+  dismissUdharFollowUp,
+  recordPersonRepayment,
+  recordUdharRepayment,
+  removePerson,
+  removePersonNote,
+  removeUdhar,
+  savePerson,
+  settlePersonNet,
+  settleUdhar,
+} from "@/services/udhar";
 import type {
   Account,
   Activity,
@@ -49,11 +64,17 @@ import type {
   Goal,
   Investment,
   Loan,
+  Person,
+  PersonNote,
   QuickAddKind,
   RecurringTransaction,
   ServiceProvider,
   SkipReason,
   Transaction,
+  Udhar,
+  UdharPaymentMethod,
+  UdharRepayment,
+  UdharType,
   UserProfile,
 } from "@/types";
 
@@ -72,6 +93,10 @@ interface FinanceContextValue {
   activityRecords: ActivityRecord[];
   providers: ServiceProvider[];
   settlements: ActivitySettlement[];
+  people: Person[];
+  udhars: Udhar[];
+  udharRepayments: UdharRepayment[];
+  peopleNotes: PersonNote[];
   saveAccount: (
     input: Omit<Account, "id" | "createdAt" | "updatedAt" | "currentBalance" | "outstanding" | "archived">,
     id?: string,
@@ -128,6 +153,58 @@ interface FinanceContextValue {
     createExpense?: boolean;
     paymentMethod?: Transaction["paymentMethod"];
   }) => Promise<void>;
+  savePerson: (input: Omit<Person, "id" | "createdAt" | "updatedAt">, id?: string) => Promise<string>;
+  removePerson: (id: string) => Promise<void>;
+  saveUdhar: (
+    input: {
+      personId?: string;
+      newPersonName?: string;
+      newPersonPhone?: string;
+      newPersonRelationship?: Person["relationship"];
+      type: UdharType;
+      principalAmount: number;
+      date: string;
+      dueDate?: string | null;
+      accountId: string;
+      interestType: Udhar["interestType"];
+      interestAmount?: number;
+      interestRate?: number;
+      notes?: string;
+      reminderDays?: number;
+      remindInDailyCheck?: boolean;
+      attachments?: Transaction["attachments"];
+    },
+  ) => Promise<string>;
+  repayUdhar: (input: {
+    udharId?: string;
+    personId: string;
+    type: UdharType;
+    amount: number;
+    accountId: string;
+    paymentDate: string;
+    paymentMethod: UdharPaymentMethod;
+    notes?: string;
+    attachments?: Transaction["attachments"];
+  }) => Promise<void>;
+  settleUdharFull: (input: {
+    udharId: string;
+    accountId: string;
+    paymentDate: string;
+    paymentMethod: UdharPaymentMethod;
+    notes?: string;
+  }) => Promise<void>;
+  settleNet: (input: {
+    personId: string;
+    accountId: string;
+    paymentDate: string;
+    paymentMethod: UdharPaymentMethod;
+    notes?: string;
+  }) => Promise<void>;
+  cancelUdhar: (id: string) => Promise<void>;
+  removeUdhar: (id: string) => Promise<void>;
+  dismissUdharFollowUp: (id: string) => Promise<void>;
+  addPersonNote: (input: Omit<PersonNote, "id" | "createdAt" | "updatedAt">) => Promise<string>;
+  removePersonNote: (id: string) => Promise<void>;
   updateProfile: (patch: Partial<UserProfile>) => Promise<void>;
   quickAddOpen: boolean;
   quickAddKind: QuickAddKind;
@@ -166,6 +243,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [activityRecords, setActivityRecords] = useState<ActivityRecord[]>([]);
   const [providers, setProviders] = useState<ServiceProvider[]>([]);
   const [settlements, setSettlements] = useState<ActivitySettlement[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [udhars, setUdhars] = useState<Udhar[]>([]);
+  const [udharRepayments, setUdharRepayments] = useState<UdharRepayment[]>([]);
+  const [peopleNotes, setPeopleNotes] = useState<PersonNote[]>([]);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddKind, setQuickAddKind] = useState<QuickAddKind>("expense");
 
@@ -191,6 +272,12 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       onSnapshot(col(uid, "activitySettlements"), (snap) =>
         setSettlements(mapDocs<ActivitySettlement>(snap.docs)),
       ),
+      onSnapshot(col(uid, "people"), (snap) => setPeople(mapDocs<Person>(snap.docs))),
+      onSnapshot(col(uid, "udhar"), (snap) => setUdhars(mapDocs<Udhar>(snap.docs))),
+      onSnapshot(col(uid, "udharRepayments"), (snap) =>
+        setUdharRepayments(mapDocs<UdharRepayment>(snap.docs)),
+      ),
+      onSnapshot(col(uid, "peopleNotes"), (snap) => setPeopleNotes(mapDocs<PersonNote>(snap.docs))),
     ];
 
     const range = lastNMonthsRange(18);
@@ -302,6 +389,9 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       if (!uid) return;
       const tx = transactions.find((item) => item.id === id);
       if (!tx) return;
+      if (tx.udharId) {
+        throw new Error("Manage this from People & Udhar so balances stay in sync");
+      }
       if (tx.loanId && tx.principalAmount) {
         const loan = loans.find((item) => item.id === tx.loanId);
         if (loan) {
@@ -638,6 +728,229 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     [uid, activities, activityRecords, settlements, saveTransaction],
   );
 
+  const savePersonRecord = useCallback(
+    async (input: Omit<Person, "id" | "createdAt" | "updatedAt">, id?: string) => {
+      if (!uid) throw new Error("Not signed in");
+      return savePerson(uid, input, id);
+    },
+    [uid],
+  );
+
+  const removePersonRecord = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      await removePerson(uid, id, udhars);
+    },
+    [uid, udhars],
+  );
+
+  const saveUdharRecord = useCallback(
+    async (input: {
+      personId?: string;
+      newPersonName?: string;
+      newPersonPhone?: string;
+      newPersonRelationship?: Person["relationship"];
+      type: UdharType;
+      principalAmount: number;
+      date: string;
+      dueDate?: string | null;
+      accountId: string;
+      interestType: Udhar["interestType"];
+      interestAmount?: number;
+      interestRate?: number;
+      notes?: string;
+      reminderDays?: number;
+      remindInDailyCheck?: boolean;
+      attachments?: Transaction["attachments"];
+    }) => {
+      if (!uid) throw new Error("Not signed in");
+      let person = people.find((item) => item.id === input.personId);
+      if (!person) {
+        if (!input.newPersonName?.trim()) throw new Error("Choose or add a person");
+        const personId = await createPersonInline(uid, {
+          name: input.newPersonName,
+          phone: input.newPersonPhone,
+          relationship: input.newPersonRelationship,
+        });
+        person = {
+          id: personId,
+          name: input.newPersonName.trim(),
+          phone: input.newPersonPhone,
+          relationship: input.newPersonRelationship,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return createUdhar(uid, accounts, person, {
+        personId: person.id,
+        type: input.type,
+        principalAmount: input.principalAmount,
+        date: input.date,
+        dueDate: input.dueDate,
+        accountId: input.accountId,
+        interestType: input.interestType,
+        interestAmount: input.interestAmount,
+        interestRate: input.interestRate,
+        notes: input.notes,
+        reminderDays: input.reminderDays,
+        remindInDailyCheck: input.remindInDailyCheck,
+        attachments: input.attachments,
+      });
+    },
+    [uid, people, accounts],
+  );
+
+  const repayUdharRecord = useCallback(
+    async (input: {
+      udharId?: string;
+      personId: string;
+      type: UdharType;
+      amount: number;
+      accountId: string;
+      paymentDate: string;
+      paymentMethod: UdharPaymentMethod;
+      notes?: string;
+      attachments?: Transaction["attachments"];
+    }) => {
+      if (!uid) throw new Error("Not signed in");
+      const person = people.find((item) => item.id === input.personId);
+      if (!person) throw new Error("Person not found");
+      const repayment = {
+        amount: input.amount,
+        accountId: input.accountId,
+        paymentDate: input.paymentDate,
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+        attachments: input.attachments,
+      };
+      if (input.udharId) {
+        const udhar = udhars.find((item) => item.id === input.udharId);
+        if (!udhar) throw new Error("Udhar record not found");
+        await recordUdharRepayment({
+          uid,
+          accounts,
+          categories,
+          person,
+          udhar,
+          repayments: udharRepayments,
+          repayment,
+        });
+        return;
+      }
+      await recordPersonRepayment({
+        uid,
+        accounts,
+        categories,
+        person,
+        udhars,
+        repayments: udharRepayments,
+        type: input.type,
+        repayment,
+      });
+    },
+    [uid, people, udhars, udharRepayments, accounts, categories],
+  );
+
+  const settleUdharFull = useCallback(
+    async (input: {
+      udharId: string;
+      accountId: string;
+      paymentDate: string;
+      paymentMethod: UdharPaymentMethod;
+      notes?: string;
+    }) => {
+      if (!uid) throw new Error("Not signed in");
+      const udhar = udhars.find((item) => item.id === input.udharId);
+      if (!udhar) throw new Error("Udhar record not found");
+      const person = people.find((item) => item.id === udhar.personId);
+      if (!person) throw new Error("Person not found");
+      await settleUdhar({
+        uid,
+        accounts,
+        categories,
+        person,
+        udhar,
+        repayments: udharRepayments,
+        accountId: input.accountId,
+        paymentDate: input.paymentDate,
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+      });
+    },
+    [uid, udhars, people, accounts, categories, udharRepayments],
+  );
+
+  const settleNetRecord = useCallback(
+    async (input: {
+      personId: string;
+      accountId: string;
+      paymentDate: string;
+      paymentMethod: UdharPaymentMethod;
+      notes?: string;
+    }) => {
+      if (!uid) throw new Error("Not signed in");
+      const person = people.find((item) => item.id === input.personId);
+      if (!person) throw new Error("Person not found");
+      await settlePersonNet({
+        uid,
+        accounts,
+        categories,
+        person,
+        udhars,
+        repayments: udharRepayments,
+        accountId: input.accountId,
+        paymentDate: input.paymentDate,
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+      });
+    },
+    [uid, people, accounts, categories, udhars, udharRepayments],
+  );
+
+  const cancelUdharRecord = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const udhar = udhars.find((item) => item.id === id);
+      if (!udhar) return;
+      await cancelUdhar(uid, udhar);
+    },
+    [uid, udhars],
+  );
+
+  const removeUdharRecord = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const udhar = udhars.find((item) => item.id === id);
+      if (!udhar) return;
+      await removeUdhar(uid, accounts, udhar, udharRepayments, transactions);
+    },
+    [uid, accounts, udhars, udharRepayments, transactions],
+  );
+
+  const dismissFollowUp = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      await dismissUdharFollowUp(uid, id, todayISO());
+    },
+    [uid],
+  );
+
+  const addNoteRecord = useCallback(
+    async (input: Omit<PersonNote, "id" | "createdAt" | "updatedAt">) => {
+      if (!uid) throw new Error("Not signed in");
+      return addPersonNote(uid, input);
+    },
+    [uid],
+  );
+
+  const removeNoteRecord = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      await removePersonNote(uid, id);
+    },
+    [uid],
+  );
+
   const updateProfile = useCallback(
     async (patch: Partial<UserProfile>) => {
       if (!uid) return;
@@ -662,6 +975,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       activityRecords,
       providers,
       settlements,
+      people,
+      udhars,
+      udharRepayments,
+      peopleNotes,
       saveAccount,
       archiveAccount,
       removeAccount,
@@ -693,6 +1010,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       pauseActivity,
       resumeActivity,
       paySettlement,
+      savePerson: savePersonRecord,
+      removePerson: removePersonRecord,
+      saveUdhar: saveUdharRecord,
+      repayUdhar: repayUdharRecord,
+      settleUdharFull,
+      settleNet: settleNetRecord,
+      cancelUdhar: cancelUdharRecord,
+      removeUdhar: removeUdharRecord,
+      dismissUdharFollowUp: dismissFollowUp,
+      addPersonNote: addNoteRecord,
+      removePersonNote: removeNoteRecord,
       updateProfile,
       quickAddOpen,
       quickAddKind,
@@ -717,6 +1045,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       activityRecords,
       providers,
       settlements,
+      people,
+      udhars,
+      udharRepayments,
+      peopleNotes,
       saveAccount,
       archiveAccount,
       removeAccount,
@@ -748,6 +1080,17 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       pauseActivity,
       resumeActivity,
       paySettlement,
+      savePersonRecord,
+      removePersonRecord,
+      saveUdharRecord,
+      repayUdharRecord,
+      settleUdharFull,
+      settleNetRecord,
+      cancelUdharRecord,
+      removeUdharRecord,
+      dismissFollowUp,
+      addNoteRecord,
+      removeNoteRecord,
       updateProfile,
       quickAddOpen,
       quickAddKind,

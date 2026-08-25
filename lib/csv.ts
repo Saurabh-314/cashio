@@ -1,4 +1,5 @@
 import { csvRowSchema } from "@/lib/validations";
+import { isUdharTransaction } from "@/lib/finance/calculations";
 import type { Account, Category, Transaction, TransactionType } from "@/types";
 
 export interface CsvPreviewRow {
@@ -84,8 +85,8 @@ export function transactionsToCsv(
       tx.date,
       tx.description,
       String(tx.amount),
-      tx.type,
-      category,
+      isUdharTransaction(tx) ? "udhar" : tx.type,
+      isUdharTransaction(tx) ? "People & Udhar" : category,
       account,
       tx.merchant ?? "",
       tx.notes ?? "",

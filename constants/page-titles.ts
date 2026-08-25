@@ -3,6 +3,7 @@ export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/transactions", title: "Transactions" },
   { prefix: "/daily-check", title: "Daily Check" },
   { prefix: "/accounts", title: "Accounts" },
+  { prefix: "/people", title: "People & Udhar" },
   { prefix: "/budgets", title: "Budgets" },
   { prefix: "/goals", title: "Goals" },
   { prefix: "/loans", title: "Loans" },

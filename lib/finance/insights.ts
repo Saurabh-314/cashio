@@ -26,6 +26,7 @@ export function buildInsights(input: {
   range: { start: string; end: string };
   pendingChecks?: number;
   unpaidServices?: number;
+  overdueUdhar?: { name: string; amount: number; days: number }[];
 }): Insight[] {
   const insights: Insight[] = [];
   const { currency } = input;
@@ -158,6 +159,19 @@ export function buildInsights(input: {
       tone: "warning",
       title: `${formatMoney(input.unpaidServices ?? 0, currency)} unpaid to service providers`,
       body: "Settle milk, maid, and other activity totals from Daily Check → Payments.",
+    });
+  }
+
+  if (input.overdueUdhar?.length) {
+    const first = input.overdueUdhar[0];
+    insights.unshift({
+      id: "udhar-overdue",
+      tone: "warning",
+      title: `${first.name}'s ${formatMoney(first.amount, currency)} is overdue`,
+      body:
+        input.overdueUdhar.length === 1
+          ? `Overdue by ${first.days} day${first.days === 1 ? "" : "s"}. Open People & Udhar to follow up.`
+          : `${input.overdueUdhar.length} repayments are overdue. Open People & Udhar to follow up.`,
     });
   }
 
