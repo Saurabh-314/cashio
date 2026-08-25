@@ -36,6 +36,7 @@ import {
   formatSchedule,
   monthStats,
   monthSummary,
+  occurrenceAmount,
   pricingLabel,
   previewSettlement,
   todayRows,
@@ -249,8 +250,12 @@ export function DailyCheckView() {
                       <p className="font-medium">{row.activity.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {row.activity.providerName || formatSchedule(row.activity)} ·{" "}
-                        <CurrencyDisplay amount={row.activity.amount} currency={currency} className="text-xs" /> /{" "}
-                        {pricingLabel(row.activity)}
+                        <CurrencyDisplay
+                          amount={occurrenceAmount(row.activity)}
+                          currency={currency}
+                          className="text-xs"
+                        />{" "}
+                        / {pricingLabel(row.activity)}
                       </p>
                     </div>
                     <CheckStatusBadge status={row.status} />
@@ -605,7 +610,7 @@ function ActivityCard({
           <CheckStatusBadge status={status} />
         </div>
         <p className="text-sm">
-          <CurrencyDisplay amount={activity.amount} currency={currency} className="font-medium" />
+          <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" />
           <span className="text-muted-foreground"> / {pricingLabel(activity)}</span>
         </p>
         <p className="text-xs text-muted-foreground">

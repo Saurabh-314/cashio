@@ -42,6 +42,7 @@ import {
   dayStatus,
   formatSchedule,
   monthSummary,
+  occurrenceAmount,
   previewSettlement,
   pricingLabel,
 } from "@/lib/finance/activity-calculations";
@@ -260,7 +261,7 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
                 <DynamicIcon name={activity.icon} className="size-4 text-muted-foreground" />
                 <div>
                   <p className="font-medium">
-                    <CurrencyDisplay amount={activity.amount} currency={currency} className="font-medium" /> / {pricingLabel(activity)}
+                    <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" /> / {pricingLabel(activity)}
                   </p>
                   <p className="text-xs text-muted-foreground">{activity.description || activity.notes || "No notes"}</p>
                 </div>

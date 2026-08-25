@@ -118,7 +118,6 @@ export function recordAmount(activity: Activity, quantity: number, month: string
   switch (activity.pricingType) {
     case "daily":
     case "per_visit":
-      return roundMoney(activity.amount * (activity.pricingType === "per_visit" ? 1 : qty > 0 ? 1 : 0));
     case "per_unit":
     case "custom":
       return roundMoney(activity.amount * qty);
@@ -132,6 +131,14 @@ export function recordAmount(activity: Activity, quantity: number, month: string
     default:
       return roundMoney(activity.amount * qty);
   }
+}
+
+export function occurrenceAmount(activity: Activity, quantity?: number): number {
+  const qty = Math.max(0, quantity ?? activity.defaultQuantity ?? 1);
+  if (activity.pricingType === "weekly" || activity.pricingType === "monthly") {
+    return roundMoney(activity.amount);
+  }
+  return roundMoney(activity.amount * qty);
 }
 
 export function recordsForActivity(
@@ -239,9 +246,7 @@ function monthAmount(
   const completed = monthRecords.filter((item) => item.status === "completed");
   switch (activity.pricingType) {
     case "daily":
-      return roundMoney(activity.amount * completedDays);
     case "per_visit":
-      return roundMoney(activity.amount * completedDays);
     case "per_unit":
     case "custom":
       return roundMoney(activity.amount * quantity);
