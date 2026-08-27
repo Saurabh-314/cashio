@@ -1,5 +1,6 @@
 export const PAGE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/dashboard", title: "Dashboard" },
+  { prefix: "/ai", title: "Cashio AI" },
   { prefix: "/transactions", title: "Transactions" },
   { prefix: "/daily-check", title: "Daily Check" },
   { prefix: "/accounts", title: "Accounts" },

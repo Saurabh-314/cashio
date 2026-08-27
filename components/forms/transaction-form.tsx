@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CategorySelect } from "@/components/forms/category-select";
 import { Field } from "@/components/forms/field";
 import { MoneyInput } from "@/components/forms/money-input";
 import { useAuth } from "@/hooks/use-auth";
@@ -61,9 +62,6 @@ export function TransactionForm({
   });
 
   const watchType = form.watch("type");
-  const relevantCategories = categories.filter((item) =>
-    watchType === "income" ? item.kind === "income" : item.kind === "expense",
-  );
   const activeAccounts = accounts.filter((item) => !item.archived);
 
   async function onSubmit(values: TransactionValues) {
@@ -181,21 +179,12 @@ export function TransactionForm({
         </Field>
       ) : (
         <Field label="Category">
-          <Select
+          <CategorySelect
+            categories={categories}
             value={form.watch("categoryId") ?? ""}
-            onValueChange={(value) => form.setValue("categoryId", value)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {relevantCategories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(value) => form.setValue("categoryId", value)}
+            placeholder="Select category"
+          />
         </Field>
       )}
       <div className="grid gap-3 sm:grid-cols-2">

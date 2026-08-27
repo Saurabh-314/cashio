@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { TransactionItem } from "@/components/transactions/transaction-item";
+import { CategorySelect } from "@/components/forms/category-select";
 import { TransactionForm } from "@/components/forms/transaction-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,19 +113,13 @@ export function TransactionsView() {
           ))}
         </SelectContent>
       </Select>
-      <Select value={categoryId} onValueChange={setCategoryId}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All categories</SelectItem>
-          {categories.map((category) => (
-            <SelectItem key={category.id} value={category.id}>
-              {category.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <CategorySelect
+        categories={categories}
+        value={categoryId}
+        onChange={setCategoryId}
+        placeholder="Category"
+        allowAll
+      />
       <Select value={sort} onValueChange={setSort}>
         <SelectTrigger className="w-full">
           <SelectValue />

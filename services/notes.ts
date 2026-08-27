@@ -4,6 +4,7 @@ import { getDb } from "@/lib/firebase/client";
 import { col, nowIso, stripUndefined, toIso, withId } from "@/services/helpers";
 import { addDocAt, deleteDocAt, updateDocAt } from "@/services/transactions";
 import { deleteReceipt } from "@/services/storage";
+import { parseNoteContent, serializeNoteContent } from "@/lib/note-document";
 import type {
   Note,
   NoteAttachment,
@@ -119,7 +120,7 @@ export async function createNote(uid: string, input: NoteInput): Promise<string>
   }
   return addDocAt(uid, "notes", stripUndefined({
     title: input.title.trim(),
-    content: input.content,
+    content: serializeNoteContent(parseNoteContent(input.content ?? "")),
     categoryId: input.categoryId,
     tags: input.tags,
     isPinned: Boolean(input.isPinned),
@@ -145,6 +146,7 @@ export async function saveNote(uid: string, id: string, input: Partial<NoteInput
   await updateDocAt(uid, "notes", id, stripUndefined({
     ...input,
     title: input.title?.trim(),
+    content: input.content !== undefined ? serializeNoteContent(parseNoteContent(input.content)) : undefined,
     timeline,
   }));
 }

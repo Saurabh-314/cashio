@@ -12,6 +12,12 @@ import {
   isValid,
 } from "date-fns";
 import { RELATED_TYPE_LABEL } from "@/constants/notes";
+import {
+  convertNoteChecklistToList,
+  noteChecklistProgress,
+  notePlainText,
+  toggleNoteChecklistItem,
+} from "@/lib/note-document";
 import type {
   Account,
   Activity,
@@ -28,36 +34,14 @@ import type {
   Transaction,
 } from "@/types";
 
-const CHECKBOX_RE = /^(\s*)[-*] \[([ xX])\] (.*)$/;
-
 export function previewText(content: string, max = 140): string {
-  const plain = content
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/!\[[^\]]*]\([^)]+\)/g, " ")
-    .replace(/\[([^\]]+)]\([^)]+\)/g, "$1")
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^\s*[-*]\s+\[[ xX]\]\s+/gm, "")
-    .replace(/^\s*[-*]\s+/gm, "")
-    .replace(/^\s*\d+\.\s+/gm, "")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
-    .replace(/\s+/g, " ")
-    .trim();
+  const plain = notePlainText(content);
   if (plain.length <= max) return plain;
   return `${plain.slice(0, max).trim()}…`;
 }
 
 export function checklistProgress(content: string): { total: number; done: number } {
-  const lines = content.split("\n");
-  let total = 0;
-  let done = 0;
-  for (const line of lines) {
-    const match = line.match(CHECKBOX_RE);
-    if (!match) continue;
-    total += 1;
-    if (match[2].toLowerCase() === "x") done += 1;
-  }
-  return { total, done };
+  return noteChecklistProgress(content);
 }
 
 export function hasChecklist(content: string): boolean {
@@ -65,29 +49,11 @@ export function hasChecklist(content: string): boolean {
 }
 
 export function toggleChecklistItem(content: string, index: number): string {
-  let current = -1;
-  return content
-    .split("\n")
-    .map((line) => {
-      const match = line.match(CHECKBOX_RE);
-      if (!match) return line;
-      current += 1;
-      if (current !== index) return line;
-      const checked = match[2].toLowerCase() === "x";
-      return `${match[1]}- [${checked ? " " : "x"}] ${match[3]}`;
-    })
-    .join("\n");
+  return toggleNoteChecklistItem(content, index);
 }
 
 export function convertChecklistToNote(content: string): string {
-  return content
-    .split("\n")
-    .map((line) => {
-      const match = line.match(CHECKBOX_RE);
-      if (!match) return line;
-      return `${match[1]}- ${match[3]}`;
-    })
-    .join("\n");
+  return convertNoteChecklistToList(content);
 }
 
 export function parseTags(value: string): string[] {
@@ -105,7 +71,7 @@ export function parseTags(value: string): string[] {
 export function noteMatchesQuery(note: Note, query: string, categoryName?: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return [note.title, note.content, categoryName ?? "", ...note.tags].join(" ").toLowerCase().includes(q);
+  return [note.title, notePlainText(note.content), categoryName ?? "", ...note.tags].join(" ").toLowerCase().includes(q);
 }
 
 function inDateFilter(

@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Paperclip } from "lucide-react";
 import { toast } from "sonner";
 import { Field } from "@/components/forms/field";
 import { NoteAttachments } from "@/components/notes/note-attachments";
+import { NoteEditorCanvas } from "@/components/notes/note-editor-canvas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -31,8 +31,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
-import { parseTags, convertChecklistToNote, hasChecklist } from "@/lib/notes";
-import { clearNoteDraft, draftIsNewer, loadNoteDraft, saveNoteDraft } from "@/lib/notes-draft";
+import { parseTags } from "@/lib/notes";
+import { parseNoteContent, serializeNoteContent } from "@/lib/note-document";
+import { clearNoteDraft, draftIsNewer, loadNoteDraft, saveNoteDraft, type NoteDraft } from "@/lib/notes-draft";
 import { ALLOWED_NOTE_FILE_TYPES, MAX_NOTE_FILE_SIZE, NOTE_TEMPLATES } from "@/constants/notes";
 import { noteSchema } from "@/lib/validations";
 import { uploadNoteFile } from "@/services/storage";
@@ -40,13 +41,6 @@ import { getErrorMessage } from "@/lib/firebase/errors";
 import type { NoteRelatedType } from "@/types";
 
 const NONE = "__none__";
-
-function insertAtCursor(value: string, start: number, end: number, insert: string) {
-  return {
-    next: `${value.slice(0, start)}${insert}${value.slice(end)}`,
-    caret: start + insert.length,
-  };
-}
 
 export function NoteEditorView({ noteId }: { noteId?: string }) {
   const router = useRouter();
@@ -71,7 +65,6 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
   const existing = notes.find((item) => item.id === (noteId ?? savedId));
   const uid = user?.uid;
   const draftId = noteId ?? "new";
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const relatedTypeParam = searchParams.get("relatedType") as NoteRelatedType | null;
@@ -98,9 +91,12 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
   const [relatedId, setRelatedId] = useState(existing?.relatedEntity?.id ?? relatedIdParam ?? "");
   const [saving, setSaving] = useState(false);
   const [draftPrompt, setDraftPrompt] = useState(false);
-  const [pendingDraft, setPendingDraft] = useState<{ title: string; content: string } | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<NoteDraft | null>(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [newCategory, setNewCategory] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "unsaved" | "saving" | "saved">("idle");
+  const [editorSeed, setEditorSeed] = useState(existing?.content ?? template?.content ?? "");
+  const [editorKey, setEditorKey] = useState(noteId ?? "new");
   const hydrated = useRef(false);
 
   useEffect(() => {
@@ -114,6 +110,8 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
       setIsArchived(existing.isArchived);
       setRelatedType(existing.relatedEntity?.type ?? "none");
       setRelatedId(existing.relatedEntity?.id ?? "");
+      setEditorSeed(existing.content);
+      setEditorKey(existing.id);
       hydrated.current = true;
     }
   }, [existing]);
@@ -149,56 +147,77 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
     return [];
   }, [accounts, activities, bills, goals, loans, providers, relatedType, transactions]);
 
-  function applySnippet(snippet: string) {
-    const el = textareaRef.current;
-    const start = el?.selectionStart ?? content.length;
-    const end = el?.selectionEnd ?? content.length;
-    const { next, caret } = insertAtCursor(content, start, end, snippet);
-    setContent(next);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(caret, caret);
-    });
-  }
-
-  async function persist(id?: string) {
-    const parsed = noteSchema.safeParse({
-      title,
+  const persist = useCallback(
+    async (id?: string) => {
+      const parsed = noteSchema.safeParse({
+        title,
+        content,
+        categoryId: categoryId || undefined,
+        tags,
+        reminderAt: reminderAt || undefined,
+        isPinned,
+        isArchived,
+        relatedType,
+        relatedId: relatedId || undefined,
+      });
+      if (!parsed.success) {
+        toast.error(parsed.error.issues[0]?.message ?? "Check the note");
+        return null;
+      }
+      const relatedEntity =
+        relatedType !== "none" && relatedId
+          ? { type: relatedType, id: relatedId }
+          : undefined;
+      const nextId = await saveNote(
+        {
+          title: parsed.data.title,
+          content: serializeNoteContent(parseNoteContent(parsed.data.content ?? content)),
+          categoryId: parsed.data.categoryId,
+          tags: parseTags(parsed.data.tags ?? ""),
+          isPinned: Boolean(parsed.data.isPinned),
+          isArchived: Boolean(parsed.data.isArchived),
+          reminderAt: parsed.data.reminderAt || undefined,
+          relatedEntity,
+          attachments: existing?.attachments ?? [],
+          timeline: existing?.timeline ?? [],
+        },
+        id ?? savedId ?? noteId,
+      );
+      setSavedId(nextId);
+      return nextId;
+    },
+    [
+      categoryId,
       content,
-      categoryId: categoryId || undefined,
-      tags,
-      reminderAt: reminderAt || undefined,
-      isPinned,
+      existing?.attachments,
+      existing?.timeline,
       isArchived,
+      isPinned,
+      noteId,
+      relatedId,
       relatedType,
-      relatedId: relatedId || undefined,
-    });
-    if (!parsed.success) {
-      toast.error(parsed.error.issues[0]?.message ?? "Check the note");
-      return null;
-    }
-    const relatedEntity =
-      relatedType !== "none" && relatedId
-        ? { type: relatedType, id: relatedId }
-        : undefined;
-    const nextId = await saveNote(
-      {
-        title: parsed.data.title,
-        content: parsed.data.content ?? "",
-        categoryId: parsed.data.categoryId,
-        tags: parseTags(parsed.data.tags ?? ""),
-        isPinned: Boolean(parsed.data.isPinned),
-        isArchived: Boolean(parsed.data.isArchived),
-        reminderAt: parsed.data.reminderAt || undefined,
-        relatedEntity,
-        attachments: existing?.attachments ?? [],
-        timeline: existing?.timeline ?? [],
-      },
-      id ?? savedId ?? noteId,
-    );
-    setSavedId(nextId);
-    return nextId;
-  }
+      reminderAt,
+      savedId,
+      saveNote,
+      tags,
+      title,
+    ],
+  );
+
+  useEffect(() => {
+    if (saveStatus !== "unsaved" || !savedId || !title.trim()) return;
+    const timer = window.setTimeout(async () => {
+      setSaveStatus("saving");
+      try {
+        const id = await persist(savedId);
+        if (id) setSaveStatus("saved");
+        else setSaveStatus("unsaved");
+      } catch {
+        setSaveStatus("unsaved");
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [content, persist, saveStatus, savedId, title]);
 
   async function onSave() {
     setSaving(true);
@@ -206,6 +225,7 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
       const id = await persist();
       if (!id) return;
       if (uid) clearNoteDraft(uid, draftId);
+      setSaveStatus("saved");
       toast.success("Note saved");
       router.replace(`/notes/${id}`);
     } catch (error) {
@@ -253,47 +273,38 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
             <ArrowLeft /> Notes
           </Link>
         </Button>
-        <Button onClick={onSave} disabled={saving}>
-          Save
-        </Button>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : saveStatus === "unsaved" ? "Unsaved" : null}
+          </p>
+          <Button variant="ghost" asChild>
+            <Link href={savedId ? `/notes/${savedId}` : "/notes"}>Cancel</Link>
+          </Button>
+          <Button onClick={() => void onSave()} disabled={saving}>
+            Save note
+          </Button>
+        </div>
       </div>
 
       <Input
         value={title}
-        onChange={(event) => setTitle(event.target.value)}
+        onChange={(event) => {
+          setTitle(event.target.value);
+          if (savedId) setSaveStatus("unsaved");
+        }}
         placeholder="Title"
-        className="h-auto border-0 bg-transparent px-0 font-display text-3xl font-medium tracking-tight shadow-none focus-visible:ring-0 md:text-3xl"
+        className="h-auto border-0 bg-transparent p-4 font-display text-2xl font-medium tracking-tight shadow-none focus-visible:ring-0 md:text-2xl"
       />
 
-      <div className="flex flex-wrap gap-1">
-        {[
-          { label: "H", snippet: "## " },
-          { label: "B", snippet: "**bold**" },
-          { label: "I", snippet: "*italic*" },
-          { label: "List", snippet: "- " },
-          { label: "1.", snippet: "1. " },
-          { label: "Task", snippet: "- [ ] " },
-          { label: "Link", snippet: "[text](https://)" },
-        ].map((item) => (
-          <Button key={item.label} type="button" size="xs" variant="ghost" onClick={() => applySnippet(item.snippet)}>
-            {item.label}
-          </Button>
-        ))}
-      </div>
-
-      <Textarea
-        ref={textareaRef}
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
-        placeholder="Your note content..."
-        className="min-h-[46vh] resize-y border-0 bg-transparent px-0 text-base leading-7 shadow-none focus-visible:ring-0 md:text-base"
+      <NoteEditorCanvas
+        key={editorKey}
+        initialContent={editorSeed}
+        placeholder="Start writing your note..."
+        onChange={(doc) => {
+          setContent(serializeNoteContent(doc));
+          setSaveStatus(savedId ? "unsaved" : "idle");
+        }}
       />
-
-      {hasChecklist(content) ? (
-        <Button type="button" size="sm" variant="outline" onClick={() => setContent(convertChecklistToNote(content))}>
-          Convert checklist to a regular note
-        </Button>
-      ) : null}
 
       <div className="grid gap-4 rounded-lg border border-border bg-card p-5 sm:grid-cols-2">
         <Field label="Category">
@@ -330,7 +341,11 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
               const next = NOTE_TEMPLATES.find((item) => item.id === value);
               if (!next) return;
               setTitle((current) => current || next.title);
-              setContent((current) => (current.trim() ? current : next.content));
+              const body = serializeNoteContent(parseNoteContent(next.content));
+              setContent(body);
+              setEditorSeed(body);
+              setEditorKey(`template-${next.id}`);
+              if (savedId) setSaveStatus("unsaved");
               const match = noteCategories.find((item) => item.name === next.category);
               if (match) setCategoryId(match.id);
             }}
@@ -423,9 +438,12 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
         )}
       </div>
 
-      <div className="flex justify-end pb-10">
-        <Button onClick={onSave} disabled={saving}>
-          Save
+      <div className="flex justify-end gap-2 pb-10">
+        <Button variant="ghost" asChild>
+          <Link href={savedId ? `/notes/${savedId}` : "/notes"}>Cancel</Link>
+        </Button>
+        <Button onClick={() => void onSave()} disabled={saving}>
+          Save note
         </Button>
       </div>
 
@@ -450,6 +468,9 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
                 if (pendingDraft) {
                   setTitle(pendingDraft.title);
                   setContent(pendingDraft.content);
+                  setEditorSeed(pendingDraft.content);
+                  setEditorKey(`draft-${pendingDraft.savedAt}`);
+                  if (savedId) setSaveStatus("unsaved");
                 }
               }}
             >

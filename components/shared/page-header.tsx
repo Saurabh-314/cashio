@@ -12,11 +12,19 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <div className={cn("mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between", className)}>
-      <div>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    <div
+      className={cn(
+        "sticky top-16 z-20 -mx-4 mb-8 flex flex-col gap-4 bg-background/90 px-4 py-4 backdrop-blur-md sm:flex-row sm:items-start sm:justify-between lg:-mx-10 lg:px-10",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <h1 className="font-display text-[1.65rem] leading-tight font-medium tracking-tight lg:text-[2rem]">
+          {title}
+        </h1>
+        {description ? <p className="mt-1.5 text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
+      {children ? <div className="flex flex-wrap items-center gap-2 sm:pt-1">{children}</div> : null}
     </div>
   );
 }

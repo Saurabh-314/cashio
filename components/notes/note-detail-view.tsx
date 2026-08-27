@@ -44,6 +44,7 @@ export function NoteDetailView({ noteId }: { noteId: string }) {
   const note = notes.find((item) => item.id === noteId);
   const [editing, setEditing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [trashOpen, setTrashOpen] = useState(false);
   const category = noteCategories.find((item) => item.id === note?.categoryId);
   const progress = note ? checklistProgress(note.content) : { total: 0, done: 0 };
 
@@ -136,7 +137,7 @@ export function NoteDetailView({ noteId }: { noteId: string }) {
               <Button variant="outline" size="sm" onClick={() => restoreNote(note.id)}>
                 <RotateCcw /> Restore
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => trashNote(note.id)}>
+              <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
                 <Trash2 /> Delete
               </Button>
             </>
@@ -145,7 +146,7 @@ export function NoteDetailView({ noteId }: { noteId: string }) {
               <Button variant="outline" size="sm" onClick={() => archiveNote(note.id)}>
                 <Archive /> Archive
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => trashNote(note.id)}>
+              <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)}>
                 <Trash2 /> Delete
               </Button>
             </>
@@ -226,10 +227,22 @@ export function NoteDetailView({ noteId }: { noteId: string }) {
       ) : null}
 
       <ConfirmDialog
+        open={trashOpen}
+        onOpenChange={setTrashOpen}
+        title="Delete this note?"
+        description="The note will be moved to trash. You can restore it later."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          void trashNote(note.id);
+        }}
+      />
+
+      <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title="Delete permanently?"
-        description="This note and its attachments will be removed for good."
+        title="Delete this note?"
+        description="This action cannot be undone."
+        confirmLabel="Delete"
         onConfirm={async () => {
           await deleteNoteForever(note.id);
           router.replace("/notes/trash");

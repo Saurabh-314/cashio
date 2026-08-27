@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Menu, Plus, Search } from "lucide-react";
+import { Bell, Menu, Plus, Search, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -9,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
-import { titleForPath } from "@/constants/page-titles";
+import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const { profile } = useAuth();
@@ -18,7 +19,7 @@ export function AppHeader() {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const title = titleForPath(pathname);
+  const onAi = pathname.startsWith("/ai");
   const initials = (profile?.displayName ?? "U")
     .split(" ")
     .map((part) => part[0])
@@ -27,8 +28,8 @@ export function AppHeader() {
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 h-16 border-b border-border bg-background/90 backdrop-blur-md">
-      <div className="flex h-full items-center gap-3 px-4 lg:px-8">
+    <header className="fixed top-0 right-0 left-0 z-30 h-16 border-b border-border bg-background/90 backdrop-blur-md lg:left-60">
+      <div className="flex h-full items-center gap-2 px-4 lg:gap-3 lg:px-8">
         <Button
           variant="ghost"
           size="icon"
@@ -38,14 +39,8 @@ export function AppHeader() {
         >
           <Menu className="size-4" />
         </Button>
-        <h1 className="hidden min-w-0 flex-1 font-display text-[1.65rem] leading-none font-medium tracking-tight lg:block">
-          {title}
-        </h1>
-        <div className="min-w-0 flex-1 lg:hidden">
-          <p className="font-display text-lg font-medium tracking-tight">{title}</p>
-        </div>
         <form
-          className="hidden max-w-xs flex-1 md:block"
+          className="hidden min-w-0 flex-1 md:block md:max-w-sm"
           onSubmit={(event) => {
             event.preventDefault();
             if (pathname.startsWith("/notes")) {
@@ -66,23 +61,37 @@ export function AppHeader() {
             />
           </div>
         </form>
-        <Button variant="ghost" size="icon" aria-label="Notifications" asChild>
-          <a href="/daily-check">
-            <Bell className="size-4" />
-          </a>
-        </Button>
-        <Button className="rounded-md" onClick={() => openQuickAdd("expense")}>
-          <Plus className="size-4" />
-          <span className="hidden sm:inline">Quick add</span>
-        </Button>
-        <button
-          type="button"
-          onClick={() => router.push("/settings")}
-          className="hidden size-8 items-center justify-center rounded-full border border-border bg-card text-[11px] font-medium sm:flex"
-          aria-label="Profile"
-        >
-          {initials}
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Cashio AI"
+            aria-current={onAi ? "page" : undefined}
+            className={cn(onAi && "bg-muted text-foreground")}
+            asChild
+          >
+            <Link href="/ai">
+              <Sparkles className="size-4" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Notifications" asChild>
+            <Link href="/daily-check">
+              <Bell className="size-4" />
+            </Link>
+          </Button>
+          <Button className="rounded-md" onClick={() => openQuickAdd("expense")}>
+            <Plus className="size-4" />
+            <span className="hidden sm:inline">Quick add</span>
+          </Button>
+          <button
+            type="button"
+            onClick={() => router.push("/settings")}
+            className="hidden size-8 items-center justify-center rounded-full border border-border bg-card text-[11px] font-medium sm:flex"
+            aria-label="Profile"
+          >
+            {initials}
+          </button>
+        </div>
       </div>
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" className="w-72 p-0">

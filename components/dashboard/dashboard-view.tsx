@@ -45,6 +45,7 @@ import {
   peopleBalances,
   udharTotals,
 } from "@/lib/finance/udhar";
+import { AiEntryCard, AiInsightCard } from "@/components/ai/ai-entry-card";
 import { Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { previewText, visibleReminders } from "@/lib/notes";
@@ -166,14 +167,17 @@ export function DashboardView() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="font-display text-[2rem] leading-tight font-medium tracking-tight">
+      <div className="sticky top-16 z-20 -mx-4 bg-background/90 px-4 py-4 backdrop-blur-md lg:-mx-10 lg:px-10">
+        <h1 className="font-display text-[1.65rem] leading-tight font-medium tracking-tight lg:text-[2rem]">
           {greeting()}, {firstName}
-        </h2>
+        </h1>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Your financial overview for {format(new Date(), "MMMM")}
         </p>
       </div>
+
+      <AiEntryCard />
+      {data.insights[0] ? <AiInsightCard title={data.insights[0].title} body={data.insights[0].body} /> : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {show("totalBalance") ? (

@@ -256,13 +256,13 @@ export function NotesView() {
       ) : (
         <EmptyState
           icon={BookOpen}
-          title={debounced ? "No matching notes" : "Start a journal"}
+          title={debounced ? "No matching notes" : "No notes yet"}
           description={
             debounced
               ? "Try a different search, tag, or category."
-              : "Capture ideas, reminders, shopping lists, and the details you need to remember."
+              : "Create a note to keep your thoughts, tasks and important information organized."
           }
-          actionLabel="New note"
+          actionLabel={debounced ? "New note" : "+ New Note"}
           onAction={() => router.push("/notes/new")}
         />
       )}

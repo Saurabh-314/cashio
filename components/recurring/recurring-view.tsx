@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
+import { CategorySelect } from "@/components/forms/category-select";
 import { Field } from "@/components/forms/field";
 import { MoneyInput } from "@/components/forms/money-input";
 import { Button } from "@/components/ui/button";
@@ -168,18 +169,12 @@ export function RecurringView() {
               </Select>
             </Field>
             <Field label="Category">
-              <Select value={form.watch("categoryId") ?? ""} onValueChange={(value) => form.setValue("categoryId", value)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <CategorySelect
+                categories={categories}
+                value={form.watch("categoryId") ?? ""}
+                onChange={(value) => form.setValue("categoryId", value)}
+                placeholder="Category"
+              />
             </Field>
             <Field label="Start date">
               <Input type="date" {...form.register("startDate")} />

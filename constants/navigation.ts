@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
+  Sparkles,
   ArrowLeftRight,
   ClipboardCheck,
   Wallet,
@@ -27,6 +28,7 @@ export interface NavItem {
 
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, mobile: true },
+  { href: "/ai", label: "Cashio AI", icon: Sparkles },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight, mobile: true },
   { href: "/daily-check", label: "Daily Check", icon: ClipboardCheck, mobile: true },
   { href: "/accounts", label: "Accounts", icon: Wallet, mobile: true },
