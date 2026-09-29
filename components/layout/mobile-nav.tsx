@@ -12,7 +12,6 @@ export function MobileNav() {
   const router = useRouter();
   const { openQuickAdd } = useFinance();
   const onNotes = pathname.startsWith("/notes");
-  const onAi = pathname.startsWith("/ai");
 
   return (
     <>
@@ -22,7 +21,6 @@ export function MobileNav() {
         className={cn(
           "fixed right-4 bottom-20 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-hover)] transition-colors duration-200 hover:bg-primary/90 md:hidden",
           onNotes && "hidden",
-          onAi && "hidden",
         )}
         aria-label={onNotes ? "New note" : "Add transaction"}
       >

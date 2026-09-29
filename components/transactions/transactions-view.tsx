@@ -88,7 +88,17 @@ export function TransactionsView() {
 
   const filters = (
     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-      <Select value={type} onValueChange={(value) => setType(value as typeof type)}>
+      <Select
+        value={type}
+        onValueChange={(value) => {
+          const next = value as typeof type;
+          setType(next);
+          if (next === "expense" || next === "income") {
+            const selected = categories.find((item) => item.id === categoryId);
+            if (selected && selected.kind !== next) setCategoryId("all");
+          }
+        }}
+      >
         <SelectTrigger className="w-full">
           <SelectValue placeholder="Type" />
         </SelectTrigger>
@@ -114,7 +124,11 @@ export function TransactionsView() {
         </SelectContent>
       </Select>
       <CategorySelect
-        categories={categories}
+        categories={
+          type === "expense" || type === "income"
+            ? categories.filter((item) => item.kind === type)
+            : categories
+        }
         value={categoryId}
         onChange={setCategoryId}
         placeholder="Category"

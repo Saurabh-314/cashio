@@ -286,17 +286,22 @@ export function ReportsView() {
           <CardTitle>Daily Check</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {activities.filter((item) => item.status !== "archived").length ? (
+          {activities.some((activity) => {
+            const summary = monthSummary(activity, activityRecords, range.end.slice(0, 7));
+            return summary.expectedDays > 0 || summary.amount > 0 || summary.completedDays > 0;
+          }) ? (
             activities
-              .filter((item) => item.status !== "archived")
               .map((activity) => {
                 const summary = monthSummary(activity, activityRecords, range.end.slice(0, 7));
-                if (summary.expectedDays <= 0 && summary.amount <= 0) return null;
+                if (summary.expectedDays <= 0 && summary.amount <= 0 && summary.completedDays <= 0) return null;
                 const avgQty = summary.completedDays > 0 ? summary.quantity / summary.completedDays : activity.defaultQuantity;
                 return (
                   <div key={activity.id} className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3 last:border-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-medium">{activity.name}</p>
+                      <p className="text-sm font-medium">
+                        {activity.name}
+                        {activity.status === "archived" ? " (ended)" : ""}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Unit price <ActivityUnitPriceText activity={activity} currency={currency} className="text-xs" />
                         {usesQuantity(activity) ? (

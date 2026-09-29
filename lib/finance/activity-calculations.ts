@@ -12,6 +12,7 @@ import {
   lastDayOfMonth,
   parseISO,
   startOfMonth,
+  subDays,
 } from "date-fns";
 import { WEEKDAYS } from "@/constants/activities";
 import { roundMoney } from "@/lib/finance/money";
@@ -39,8 +40,32 @@ export function settlementId(activityId: string, month: string): string {
 }
 
 export function isPausedOn(activity: Activity, date: string): boolean {
-  if (activity.status === "paused" || activity.status === "archived") return true;
+  if (activity.status === "paused") return true;
   return (activity.pauses ?? []).some((pause) => date >= pause.startDate && date <= pause.endDate);
+}
+
+export function activityEndDate(activity: Pick<Activity, "endDate" | "status" | "updatedAt">): string | undefined {
+  if (activity.endDate) return activity.endDate;
+  if (activity.status === "archived") {
+    const stamp = activity.updatedAt?.slice(0, 10);
+    return stamp || undefined;
+  }
+  return undefined;
+}
+
+/** Last day that still belongs to an activity removed from Daily Check. */
+export function archiveEndDate(
+  activity: Pick<Activity, "endDate">,
+  today: string,
+  keepToday: boolean,
+): string {
+  const stop = keepToday ? today : format(subDays(parseISO(today), 1), "yyyy-MM-dd");
+  if (activity.endDate && activity.endDate < stop) return activity.endDate;
+  return stop;
+}
+
+export function isRatePriced(activity: Pick<Activity, "pricingType">): boolean {
+  return activity.pricingType === "weekly" || activity.pricingType === "monthly";
 }
 
 function lastValidDayOfMonth(anchor: Date, monthDate: Date): Date {
@@ -53,7 +78,8 @@ export function matchesFrequency(activity: Activity, date: string): boolean {
   const current = dateObj(date);
   const start = dateObj(activity.startDate);
   if (isBefore(current, start)) return false;
-  if (activity.endDate && isAfter(current, dateObj(activity.endDate))) return false;
+  const endDate = activityEndDate(activity);
+  if (endDate && isAfter(current, dateObj(endDate))) return false;
 
   const weekday = getDay(current);
   const days = activity.activeDays ?? [];
@@ -87,7 +113,6 @@ export function matchesFrequency(activity: Activity, date: string): boolean {
 }
 
 export function isExpectedDay(activity: Activity, date: string): boolean {
-  if (activity.status === "archived") return false;
   if (isPausedOn(activity, date)) return false;
   return matchesFrequency(activity, date);
 }
@@ -275,7 +300,7 @@ export function dayStatus(
 ): ActivityCheckStatus {
   const record = records.find((item) => item.activityId === activity.id && item.date === date);
   if (record) return record.status;
-  if (!matchesFrequency(activity, date) || isPausedOn(activity, date) || activity.status === "archived") {
+  if (!matchesFrequency(activity, date) || isPausedOn(activity, date)) {
     return "not_applicable";
   }
   if (!isExpectedDay(activity, date)) return "not_applicable";
@@ -314,9 +339,8 @@ export function monthSummary(
   let missedDays = 0;
   let quantity = 0;
 
-  for (const date of expectedDates) {
-    const record = byDate.get(date);
-    const status = record?.status ?? (date > today ? "pending" : date === today ? "pending" : "missed");
+  function countDay(date: string, record: ActivityRecord | undefined, missedIfEmpty: boolean) {
+    const status = record?.status ?? (missedIfEmpty ? (date > today || date === today ? "pending" : "missed") : undefined);
     if (status === "completed") {
       completedDays += 1;
       quantity += record?.quantity ?? activity.defaultQuantity ?? 1;
@@ -325,7 +349,19 @@ export function monthSummary(
     else if (status === "missed") missedDays += 1;
   }
 
-  const expectedDays = expectedDates.length;
+  for (const date of expectedDates) {
+    countDay(date, byDate.get(date), true);
+  }
+
+  let extraDays = 0;
+  for (const record of monthRecords) {
+    if (expectedDates.includes(record.date)) continue;
+    if (record.status !== "completed" && record.status !== "skipped" && record.status !== "cancelled") continue;
+    countDay(record.date, record, false);
+    extraDays += 1;
+  }
+
+  const expectedDays = expectedDates.length + extraDays;
   const rate = expectedDays > 0 ? (completedDays / expectedDays) * 100 : 0;
   const amount = monthAmount(activity, monthRecords, expectedDays, completedDays, quantity);
 
@@ -353,6 +389,15 @@ function recordUnitPrice(record: ActivityRecord, activity: Activity): number {
   return activityUnitPrice(activity);
 }
 
+function recordedCharge(record: ActivityRecord, activity: Activity): number {
+  if (typeof record.amountOverride === "number" && Number.isFinite(record.amountOverride)) {
+    return roundMoney(Math.max(0, record.amountOverride));
+  }
+  if (record.calculatedAmount > 0) return record.calculatedAmount;
+  const qty = record.quantity || activity.defaultQuantity || 1;
+  return calculateActivityAmount({ unitPrice: recordUnitPrice(record, activity), quantity: qty });
+}
+
 function monthAmount(
   activity: Activity,
   monthRecords: ActivityRecord[],
@@ -368,13 +413,7 @@ function monthAmount(
     case "per_unit":
     case "custom": {
       if (completed.length) {
-        return roundMoney(
-          completed.reduce((sum, item) => {
-            if (item.calculatedAmount > 0) return sum + item.calculatedAmount;
-            const qty = item.quantity || activity.defaultQuantity || 1;
-            return sum + calculateActivityAmount({ unitPrice: recordUnitPrice(item, activity), quantity: qty });
-          }, 0),
-        );
+        return roundMoney(completed.reduce((sum, item) => sum + recordedCharge(item, activity), 0));
       }
       if (!usesQuantity(activity)) return roundMoney(unitPrice * completedDays);
       return calculateActivityAmount({ unitPrice, quantity });
@@ -457,6 +496,26 @@ export function activityStreaks(
   return { current, best };
 }
 
+export function checkDisplayAmount(
+  activity: Activity,
+  record: ActivityRecord | undefined,
+  status: ActivityCheckStatus,
+  expected: boolean,
+  month: string,
+): number {
+  if (status === "skipped" || status === "cancelled" || status === "not_applicable") return 0;
+  if (record && record.status === "completed" && typeof record.amountOverride === "number" && Number.isFinite(record.amountOverride)) {
+    return roundMoney(Math.max(0, record.amountOverride));
+  }
+  if (record?.status === "completed" && record.calculatedAmount > 0) return record.calculatedAmount;
+  if (status === "completed" || expected) {
+    const quantity = record?.quantity ?? activity.defaultQuantity;
+    const perOccurrence = recordAmount(activity, quantity, month);
+    return perOccurrence > 0 ? perOccurrence : occurrenceAmount(activity, quantity);
+  }
+  return 0;
+}
+
 export interface TodayActivityRow {
   activity: Activity;
   status: ActivityCheckStatus;
@@ -476,9 +535,7 @@ export function todayRows(
       const expected = isExpectedDay(activity, date);
       const status = dayStatus(activity, records, date);
       const record = records.find((item) => item.activityId === activity.id && item.date === date);
-      const amount =
-        record?.calculatedAmount ??
-        (status === "completed" || expected ? recordAmount(activity, activity.defaultQuantity, month) : 0);
+      const amount = checkDisplayAmount(activity, record, status, expected, month);
       return { activity, status, amount, expected };
     })
     .filter((row) => row.expected || row.status === "completed" || row.status === "skipped" || row.status === "cancelled")

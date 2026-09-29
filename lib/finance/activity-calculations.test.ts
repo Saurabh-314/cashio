@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  archiveEndDate,
   calculateActivityAmount,
   calculateActivityPeriodAmount,
   formatQuantityWithUnit,
@@ -209,6 +210,44 @@ describe("monthSummary", () => {
       "2026-08-31",
     );
     expect(summary.amount).toBe(3000);
+  });
+
+  it("keeps completed records after the activity is removed", () => {
+    const milk = activity({
+      status: "archived",
+      endDate: "2026-08-15",
+      frequency: "daily",
+      startDate: "2026-08-01",
+    });
+    const dates = ["2026-08-01", "2026-08-02", "2026-08-14", "2026-08-15"];
+    const summary = monthSummary(milk, dates.map((date) => completed(date)), "2026-08", "2026-08-31");
+    expect(summary.expectedDays).toBe(15);
+    expect(summary.completedDays).toBe(4);
+    expect(summary.amount).toBe(600);
+  });
+
+  it("uses a per-day amount override", () => {
+    const milk = activity({ frequency: "daily", startDate: "2026-08-01" });
+    const summary = monthSummary(
+      milk,
+      [
+        completed("2026-08-01", 2, 80),
+        { ...completed("2026-08-02", 2, 80), amountOverride: 90 },
+      ],
+      "2026-08",
+      "2026-08-02",
+    );
+    expect(summary.completedDays).toBe(2);
+    expect(summary.amount).toBe(170);
+  });
+});
+
+describe("archiveEndDate", () => {
+  it("stops before today unless that day already has a check", () => {
+    expect(archiveEndDate({}, "2026-09-29", false)).toBe("2026-09-28");
+    expect(archiveEndDate({}, "2026-09-29", true)).toBe("2026-09-29");
+    expect(archiveEndDate({ endDate: "2026-09-01" }, "2026-09-29", false)).toBe("2026-09-01");
+    expect(archiveEndDate({ endDate: "2026-10-01" }, "2026-09-29", false)).toBe("2026-09-28");
   });
 });
 

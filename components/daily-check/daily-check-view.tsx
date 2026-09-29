@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { ClipboardCheck, Plus, Check } from "lucide-react";
+import { ClipboardCheck, Plus, Check, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -51,6 +51,7 @@ import { providerSchema, type ActivityValues, type ProviderValues } from "@/lib/
 import type { Activity, CurrencyCode, SkipReason } from "@/types";
 import { EntityNotes } from "@/components/notes/entity-notes";
 import { ActivityPricingSummary, ActivityUnitPriceText } from "@/components/daily-check/activity-pricing";
+import { CheckAmountDialog, saveDailyCheckAmount } from "@/components/daily-check/check-amount-dialog";
 
 export function DailyCheckView() {
   const { profile } = useAuth();
@@ -84,14 +85,16 @@ export function DailyCheckView() {
   const [payAmount, setPayAmount] = useState(0);
   const [payAccount, setPayAccount] = useState("");
   const [payDate, setPayDate] = useState(today);
+  const [editTarget, setEditTarget] = useState<{ activityId: string; date: string } | null>(null);
 
   const active = activities.filter((item) => item.status !== "archived");
+  const ended = activities.filter((item) => item.status === "archived");
   const rows = useMemo(() => todayRows(active, activityRecords, today), [active, activityRecords, today]);
   const stats = todayStats(rows);
   const monthly = monthStats(active, activityRecords, month, today);
   const pendingRows = rows.filter((row) => row.status === "pending");
 
-  const paymentRows = active
+  const paymentRows = activities
     .map((activity) => {
       const existing = settlements.find((item) => item.activityId === activity.id && item.month === month);
       const snap = previewSettlement(activity, activityRecords, month, existing, today);
@@ -184,7 +187,7 @@ export function DailyCheckView() {
         </Button>
       </PageHeader>
 
-      {!active.length ? (
+      {!active.length && !ended.length ? (
         <EmptyState
           icon={ClipboardCheck}
           title="No recurring activities yet"
@@ -255,13 +258,18 @@ export function DailyCheckView() {
                       <p className="text-xs text-muted-foreground">
                         {row.activity.providerName || formatSchedule(row.activity)}
                       </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        className="mt-0.5 text-left text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => setEditTarget({ activityId: row.activity.id, date: today })}
+                      >
                         <ActivityUnitPriceText activity={row.activity} currency={currency} className="text-xs" />
                         {usesQuantity(row.activity) ? (
                           <>
                             {" · "}
                             {formatQuantityWithUnit(
-                              row.activity.defaultQuantity,
+                              activityRecords.find((item) => item.activityId === row.activity.id && item.date === today)?.quantity ??
+                                row.activity.defaultQuantity,
                               row.activity.unit,
                             )}
                             /{occurrencePeriodLabel(row.activity)}
@@ -269,7 +277,8 @@ export function DailyCheckView() {
                         ) : null}
                         {" · "}
                         <CurrencyDisplay amount={row.amount} currency={currency} className="text-xs font-medium text-foreground" /> today
-                      </p>
+                        <Pencil className="ml-1 inline size-3" />
+                      </button>
                     </div>
                     <CheckStatusBadge status={row.status} />
                     {row.status === "pending" ? (
@@ -325,10 +334,29 @@ export function DailyCheckView() {
             ) : null}
           </TabsContent>
 
-          <TabsContent value="activities" className="grid gap-3 md:grid-cols-2">
-            {active.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} currency={currency} today={today} />
-            ))}
+          <TabsContent value="activities" className="space-y-6">
+            {active.length ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {active.map((activity) => (
+                  <ActivityCard key={activity.id} activity={activity} currency={currency} today={today} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No activities on Daily Check right now.</p>
+            )}
+            {ended.length ? (
+              <div className="space-y-3">
+                <div>
+                  <h2 className="text-sm font-medium">No longer needed</h2>
+                  <p className="text-xs text-muted-foreground">Removed from Daily Check. Check-ins and payments stay saved.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {ended.map((activity) => (
+                    <ActivityCard key={activity.id} activity={activity} currency={currency} today={today} ended />
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="payments" className="space-y-4">
@@ -348,7 +376,10 @@ export function DailyCheckView() {
                       className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-muted/50 px-3 py-2.5"
                     >
                       <div>
-                        <p className="text-sm font-medium">{row.activity.name}</p>
+                        <p className="text-sm font-medium">
+                          {row.activity.name}
+                          {row.activity.status === "archived" ? " (ended)" : ""}
+                        </p>
                         <p className="text-xs text-muted-foreground">
                           {row.providerName} · {row.completedDays} completed
                           {usesQuantity(row.activity) ? (
@@ -397,7 +428,7 @@ export function DailyCheckView() {
           <TabsContent value="providers" className="space-y-3">
             {providers.length ? (
               providers.map((provider) => {
-                const linked = active.filter((item) => item.providerId === provider.id);
+                const linked = activities.filter((item) => item.providerId === provider.id);
                 const due = paymentRows
                   .filter((row) => linked.some((item) => item.id === row.activity.id))
                   .reduce((sum, row) => sum + row.due, 0);
@@ -408,7 +439,7 @@ export function DailyCheckView() {
                         <div>
                           <p className="font-medium">{provider.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {linked.map((item) => item.name).join(", ") || "No activities yet"}
+                            {linked.map((item) => (item.status === "archived" ? `${item.name} (ended)` : item.name)).join(", ") || "No activities yet"}
                             {provider.phone ? ` · ${provider.phone}` : ""}
                             {provider.paymentPreference ? ` · ${provider.paymentPreference.toUpperCase()}` : ""}
                           </p>
@@ -599,6 +630,28 @@ export function DailyCheckView() {
         </DialogContent>
       </Dialog>
 
+      <CheckAmountDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+        activity={activities.find((item) => item.id === editTarget?.activityId)}
+        date={editTarget?.date ?? null}
+        currency={currency}
+        record={activityRecords.find(
+          (item) => item.activityId === editTarget?.activityId && item.date === editTarget?.date,
+        )}
+        onSave={async ({ quantity, amount }) => {
+          const activity = activities.find((item) => item.id === editTarget?.activityId);
+          if (!activity || !editTarget) return;
+          try {
+            await saveDailyCheckAmount(activity, editTarget.date, quantity, amount, { saveActivity, checkIn });
+            setEditTarget(null);
+            toast.success("Check updated");
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }}
+      />
+
       <ConfirmDialog
         open={bulkOpen}
         onOpenChange={setBulkOpen}
@@ -632,14 +685,18 @@ function ActivityCard({
   activity,
   currency,
   today,
+  ended = false,
 }: {
   activity: Activity;
   currency: CurrencyCode;
   today: string;
+  ended?: boolean;
 }) {
-  const { activityRecords, checkIn } = useFinance();
+  const { activityRecords, checkIn, saveActivity } = useFinance();
+  const [editOpen, setEditOpen] = useState(false);
   const status = todayRows([activity], activityRecords, today)[0]?.status ?? "not_applicable";
   const summary = monthSummary(activity, activityRecords, today.slice(0, 7), today);
+  const record = activityRecords.find((item) => item.activityId === activity.id && item.date === today);
 
   return (
     <Card className="rounded-lg">
@@ -652,7 +709,7 @@ function ActivityCard({
               {ACTIVITY_GROUPS.find((item) => item.id === activity.group)?.label} · {formatSchedule(activity)}
             </p>
           </div>
-          <CheckStatusBadge status={status} />
+          {ended ? null : <CheckStatusBadge status={status} />}
         </div>
         <ActivityPricingSummary activity={activity} currency={currency} todayAmount={occurrenceAmount(activity)} />
         <p className="text-xs text-muted-foreground">
@@ -660,7 +717,7 @@ function ActivityCard({
           <CurrencyDisplay amount={summary.amount} currency={currency} className="text-xs" />
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {status === "pending" ? (
+          {!ended && status === "pending" ? (
             <>
               <Button size="sm" onClick={() => checkIn({ activityId: activity.id, status: "completed" })}>
                 Complete
@@ -670,10 +727,36 @@ function ActivityCard({
               </Button>
             </>
           ) : null}
+          {ended ? (
+            <Button size="sm" variant="outline" type="button" tabIndex={-1} className="pointer-events-none">
+              Ended
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+              Edit amount
+            </Button>
+          )}
           <Button size="sm" variant="ghost" asChild>
             <Link href={`/daily-check/${activity.id}`}>View history</Link>
           </Button>
         </div>
+        <CheckAmountDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          activity={activity}
+          date={today}
+          currency={currency}
+          record={record}
+          onSave={async ({ quantity, amount }) => {
+            try {
+              await saveDailyCheckAmount(activity, today, quantity, amount, { saveActivity, checkIn });
+              setEditOpen(false);
+              toast.success("Check updated");
+            } catch (error) {
+              toast.error(getErrorMessage(error));
+            }
+          }}
+        />
       </CardContent>
     </Card>
   );

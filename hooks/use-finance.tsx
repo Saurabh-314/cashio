@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { format, parseISO } from "date-fns";
+import { archiveEndDate } from "@/lib/finance/activity-calculations";
 import { roundMoney } from "@/lib/finance/money";
 import { lastNMonthsRange, todayISO } from "@/lib/utils/dates";
 import { useAuth } from "@/hooks/use-auth";
@@ -172,6 +173,7 @@ interface FinanceContextValue {
     date?: string;
     status: Exclude<ActivityCheckStatus, "pending" | "missed">;
     quantity?: number;
+    amount?: number;
     skipReason?: SkipReason;
     notes?: string;
   }) => Promise<void>;
@@ -663,8 +665,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
 
   const removeActivity = useCallback(async (id: string) => {
     if (!uid) return;
-    await deleteDocAt(uid, "activities", id);
-  }, [uid]);
+    const activity = activities.find((item) => item.id === id);
+    const today = todayISO();
+    const keepToday = activityRecords.some((item) => item.activityId === id && item.date === today);
+    await updateDocAt(uid, "activities", id, {
+      status: "archived",
+      endDate: archiveEndDate({ endDate: activity?.endDate }, today, keepToday),
+    });
+  }, [uid, activities, activityRecords]);
 
   const saveProvider = useCallback(
     async (input: Omit<ServiceProvider, "id" | "createdAt" | "updatedAt">, id?: string) => {
@@ -689,6 +697,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       date?: string;
       status: Exclude<ActivityCheckStatus, "pending" | "missed">;
       quantity?: number;
+      amount?: number;
       skipReason?: SkipReason;
       notes?: string;
     }) => {
@@ -702,6 +711,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         date,
         status: input.status,
         quantity: input.quantity,
+        amount: input.amount,
         skipReason: input.skipReason,
         notes: input.notes,
         existing,

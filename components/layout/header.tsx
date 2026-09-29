@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { Bell, Menu, Plus, Search, Sparkles } from "lucide-react";
+import { Bell, Menu, Plus, Search } from "lucide-react";
 import { useState } from "react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
-import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const { profile } = useAuth();
@@ -19,7 +18,6 @@ export function AppHeader() {
   const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const onAi = pathname.startsWith("/ai");
   const initials = (profile?.displayName ?? "U")
     .split(" ")
     .map((part) => part[0])
@@ -62,18 +60,6 @@ export function AppHeader() {
           </div>
         </form>
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Cashio AI"
-            aria-current={onAi ? "page" : undefined}
-            className={cn(onAi && "bg-muted text-foreground")}
-            asChild
-          >
-            <Link href="/ai">
-              <Sparkles className="size-4" />
-            </Link>
-          </Button>
           <Button variant="ghost" size="icon" aria-label="Notifications" asChild>
             <Link href="/daily-check">
               <Bell className="size-4" />

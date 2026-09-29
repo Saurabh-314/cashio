@@ -462,6 +462,8 @@ export interface ActivityRecord {
   status: Exclude<ActivityCheckStatus, "pending" | "missed">;
   quantity: number;
   calculatedAmount: number;
+  /** Set when this day's amount was entered by hand. Null means use the activity rate. */
+  amountOverride?: number | null;
   unitPrice?: number;
   unit?: string;
   skipReason?: SkipReason;

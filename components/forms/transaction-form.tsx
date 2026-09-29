@@ -94,7 +94,12 @@ export function TransactionForm({
         <Field label="Type" error={form.formState.errors.type?.message}>
           <Select
             value={form.watch("type")}
-            onValueChange={(value) => form.setValue("type", value as FormType)}
+            onValueChange={(value) => {
+              const next = value as FormType;
+              form.setValue("type", next);
+              const current = categories.find((item) => item.id === form.getValues("categoryId"));
+              if (current && current.kind !== next) form.setValue("categoryId", "");
+            }}
           >
             <SelectTrigger className="w-full">
               <SelectValue />
@@ -180,7 +185,7 @@ export function TransactionForm({
       ) : (
         <Field label="Category">
           <CategorySelect
-            categories={categories}
+            categories={categories.filter((item) => item.kind === watchType)}
             value={form.watch("categoryId") ?? ""}
             onChange={(value) => form.setValue("categoryId", value)}
             placeholder="Select category"

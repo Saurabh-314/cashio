@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   addMonths,
@@ -21,7 +20,7 @@ import { DynamicIcon } from "@/components/shared/dynamic-icon";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Field } from "@/components/forms/field";
 import { ActivityForm } from "@/components/daily-check/activity-form";
-import { CheckStatusBadge, SettlementStatusBadge } from "@/components/daily-check/status-badge";
+import { SettlementStatusBadge } from "@/components/daily-check/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,11 +39,12 @@ import { useFinance } from "@/hooks/use-finance";
 import {
   activityQuantity,
   activityStreaks,
+  checkDisplayAmount,
   dayStatus,
+  isExpectedDay,
   formatQuantityWithUnit,
   formatSchedule,
   monthSummary,
-  occurrenceAmount,
   previewSettlement,
   pricingLabel,
   usesQuantity,
@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils";
 import type { ActivityCheckStatus } from "@/types";
 import { EntityNotes } from "@/components/notes/entity-notes";
 import { ActivityUnitPriceText } from "@/components/daily-check/activity-pricing";
+import { CheckAmountDialog, saveDailyCheckAmount } from "@/components/daily-check/check-amount-dialog";
 
 const SYMBOL: Record<ActivityCheckStatus, string> = {
   completed: "✓",
@@ -69,7 +70,6 @@ const SYMBOL: Record<ActivityCheckStatus, string> = {
 };
 
 export function ActivityDetailView({ activityId }: { activityId: string }) {
-  const router = useRouter();
   const { profile } = useAuth();
   const {
     activities,
@@ -127,6 +127,14 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
   }
 
   const current = activity;
+  const todayRecord = activityRecords.find((item) => item.activityId === activity.id && item.date === today);
+  const todayAmount = checkDisplayAmount(
+    activity,
+    todayRecord,
+    dayStatus(activity, activityRecords, today),
+    isExpectedDay(activity, today),
+    today.slice(0, 7),
+  );
   const history = [0, 1, 2, 3, 4, 5].map((offset) => {
     const key = monthKey(addMonths(new Date(), -offset));
     return { month: key, summary: monthSummary(current, activityRecords, key, today) };
@@ -170,9 +178,16 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
   return (
     <div className="space-y-6">
       <PageHeader title={activity.name} description={formatSchedule(activity)}>
-        <Button variant="outline" onClick={() => setPauseOpen(true)}>
-          Pause
-        </Button>
+        {activity.status === "archived" ? (
+          <Button variant="outline" type="button" tabIndex={-1} className="pointer-events-none">
+            Ended
+          </Button>
+        ) : null}
+        {activity.status !== "archived" ? (
+          <Button variant="outline" onClick={() => setPauseOpen(true)}>
+            Pause
+          </Button>
+        ) : null}
         {activity.status === "paused" ? (
           <Button variant="outline" onClick={() => resumeActivity(activity.id)}>
             Resume
@@ -181,9 +196,11 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
         <Button variant="outline" onClick={() => setEditOpen(true)}>
           Edit
         </Button>
-        <Button variant="ghost" onClick={() => setDeleteOpen(true)}>
-          Delete
-        </Button>
+        {activity.status !== "archived" ? (
+          <Button variant="ghost" onClick={() => setDeleteOpen(true)}>
+            Delete
+          </Button>
+        ) : null}
       </PageHeader>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -230,7 +247,7 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
                 );
               })}
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">✓ completed · – skipped · • missed · ○ pending</p>
+            <p className="mt-3 text-xs text-muted-foreground">Tap a day to edit its quantity and amount. ✓ completed · – skipped · • missed · ○ pending</p>
           </CardContent>
         </Card>
 
@@ -271,13 +288,26 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
                   </p>
                   {usesQuantity(activity) ? (
                     <p className="text-muted-foreground">
-                      Daily quantity {formatQuantityWithUnit(activityQuantity(activity), activity.unit, pricingLabel(activity))}
+                      {todayRecord ? "Today" : "Daily quantity"}{" "}
+                      {formatQuantityWithUnit(
+                        todayRecord?.quantity ?? activityQuantity(activity),
+                        activity.unit,
+                        pricingLabel(activity),
+                      )}
                     </p>
                   ) : null}
                   <p>
                     Today&apos;s amount{" "}
-                    <CurrencyDisplay amount={occurrenceAmount(activity)} currency={currency} className="font-medium" />
+                    <CurrencyDisplay amount={todayAmount} currency={currency} className="font-medium" />
                   </p>
+                  {activity.status === "archived" ? (
+                    <p className="text-muted-foreground">
+                      Removed from Daily Check{activity.endDate ? ` on ${format(parseISO(activity.endDate), "d MMM yyyy")}` : ""}. Records are kept.
+                    </p>
+                  ) : null}
+                  <Button size="sm" variant="outline" onClick={() => setDayTarget(today)}>
+                    Edit quantity & amount
+                  </Button>
                   <p className="text-muted-foreground">
                     {format(cursor, "MMMM")} completed {summary?.completedDays ?? 0} days
                   </p>
@@ -414,28 +444,29 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(dayTarget)} onOpenChange={(open) => !open && setDayTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{dayTarget ? format(parseISO(dayTarget), "d MMM yyyy") : "Day"}</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-wrap gap-2">
-            {(["completed", "skipped", "cancelled", "not_applicable"] as const).map((status) => (
-              <Button
-                key={status}
-                variant="outline"
-                onClick={async () => {
-                  if (!dayTarget) return;
-                  await checkIn({ activityId: activity.id, date: dayTarget, status });
-                  setDayTarget(null);
-                }}
-              >
-                {status.replace("_", " ")}
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CheckAmountDialog
+        open={Boolean(dayTarget)}
+        onOpenChange={(open) => !open && setDayTarget(null)}
+        activity={activity}
+        date={dayTarget}
+        currency={currency}
+        record={activityRecords.find((item) => item.activityId === activity.id && item.date === dayTarget)}
+        onSave={async ({ quantity, amount }) => {
+          if (!dayTarget) return;
+          try {
+            await saveDailyCheckAmount(activity, dayTarget, quantity, amount, { saveActivity, checkIn });
+            setDayTarget(null);
+            toast.success("Check updated");
+          } catch (error) {
+            toast.error(getErrorMessage(error));
+          }
+        }}
+        onStatus={async (status) => {
+          if (!dayTarget) return;
+          await checkIn({ activityId: activity.id, date: dayTarget, status });
+          setDayTarget(null);
+        }}
+      />
 
       <Dialog open={payOpen} onOpenChange={setPayOpen}>
         <DialogContent>
@@ -489,10 +520,12 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete activity?"
-        description="History stays in records, but this activity will be removed from Daily Check."
+        description="It leaves Daily Check and is no longer expected. Past check-ins, quantities, amounts, and payments stay saved."
+        confirmLabel="Delete"
         onConfirm={async () => {
           await removeActivity(activity.id);
-          router.replace("/daily-check");
+          setDeleteOpen(false);
+          toast.success("Activity removed. Records are kept.");
         }}
       />
     </div>

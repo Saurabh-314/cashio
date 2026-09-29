@@ -38,6 +38,7 @@ export function CategorySelect({
     [categories],
   );
   const selected = sorted.find((item) => item.id === value);
+  const showKind = new Set(sorted.map((item) => item.kind)).size > 1;
   const isAll = allowAll && value === allValue;
 
   return (
@@ -53,7 +54,7 @@ export function CategorySelect({
           {selected ? (
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate">{selected.name}</span>
-              <span className="text-xs text-muted-foreground capitalize">{selected.kind}</span>
+              {showKind ? <span className="text-xs text-muted-foreground capitalize">{selected.kind}</span> : null}
             </span>
           ) : isAll ? (
             <span className="truncate">{allLabel}</span>
@@ -95,7 +96,9 @@ export function CategorySelect({
                     className="[&>svg:last-child]:hidden"
                   >
                     <span className="truncate">{category.name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{category.kind}</span>
+                    {showKind ? (
+                      <span className="text-xs text-muted-foreground capitalize">{category.kind}</span>
+                    ) : null}
                     <Check className={cn("ml-auto", isSelected ? "opacity-100" : "opacity-0")} />
                   </CommandItem>
                 );

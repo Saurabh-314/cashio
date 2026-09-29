@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@cursor/sdk"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },

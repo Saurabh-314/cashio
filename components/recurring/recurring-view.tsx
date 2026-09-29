@@ -142,7 +142,12 @@ export function RecurringView() {
             <Field label="Type">
               <Select
                 value={form.watch("type")}
-                onValueChange={(value) => form.setValue("type", value as RecurringValues["type"])}
+                onValueChange={(value) => {
+                  const next = value as RecurringValues["type"];
+                  form.setValue("type", next);
+                  const current = categories.find((item) => item.id === form.getValues("categoryId"));
+                  if (current && current.kind !== next) form.setValue("categoryId", "");
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -168,14 +173,16 @@ export function RecurringView() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Category">
-              <CategorySelect
-                categories={categories}
-                value={form.watch("categoryId") ?? ""}
-                onChange={(value) => form.setValue("categoryId", value)}
-                placeholder="Category"
-              />
-            </Field>
+            {form.watch("type") === "income" || form.watch("type") === "expense" ? (
+              <Field label="Category">
+                <CategorySelect
+                  categories={categories.filter((item) => item.kind === form.watch("type"))}
+                  value={form.watch("categoryId") ?? ""}
+                  onChange={(value) => form.setValue("categoryId", value)}
+                  placeholder="Category"
+                />
+              </Field>
+            ) : null}
             <Field label="Start date">
               <Input type="date" {...form.register("startDate")} />
             </Field>

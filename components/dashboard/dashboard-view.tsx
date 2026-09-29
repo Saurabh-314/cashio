@@ -45,7 +45,6 @@ import {
   peopleBalances,
   udharTotals,
 } from "@/lib/finance/udhar";
-import { AiEntryCard, AiInsightCard } from "@/components/ai/ai-entry-card";
 import { Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { previewText, visibleReminders } from "@/lib/notes";
@@ -117,7 +116,6 @@ export function DashboardView() {
         ? todayStats(todayRows(activities.filter((item) => item.status === "active"), activityRecords)).pending
         : 0,
       unpaidServices: activities
-        .filter((item) => item.status !== "archived")
         .reduce((sum, activity) => {
           const existing = settlements.find((item) => item.activityId === activity.id && item.month === monthKey());
           return sum + previewSettlement(activity, activityRecords, monthKey(), existing).due;
@@ -156,7 +154,7 @@ export function DashboardView() {
   const liveActivities = activities.filter((item) => item.status !== "archived");
   const checkRows = todayRows(liveActivities, activityRecords, todayISO());
   const checkStats = todayStats(checkRows);
-  const dueSettlements = liveActivities
+  const dueSettlements = activities
     .map((activity) => {
       const existing = settlements.find((item) => item.activityId === activity.id && item.month === month);
       return { activity, snap: previewSettlement(activity, activityRecords, month, existing) };
@@ -176,8 +174,14 @@ export function DashboardView() {
         </p>
       </div>
 
-      <AiEntryCard />
-      {data.insights[0] ? <AiInsightCard title={data.insights[0].title} body={data.insights[0].body} /> : null}
+      {data.insights[0] ? (
+        <Card>
+          <CardContent className="p-5">
+            <p className="text-sm font-medium">{data.insights[0].title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{data.insights[0].body}</p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {show("totalBalance") ? (
@@ -483,7 +487,10 @@ export function DashboardView() {
                 {dueSettlements.length ? (
                   dueSettlements.slice(0, 4).map(({ activity, snap }) => (
                     <div key={activity.id} className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{activity.name}</p>
+                      <p className="text-sm font-medium">
+                        {activity.name}
+                        {activity.status === "archived" ? " (ended)" : ""}
+                      </p>
                       <CurrencyDisplay amount={snap.due} currency={currency} className="text-sm font-medium" />
                     </div>
                   ))

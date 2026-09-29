@@ -8,6 +8,7 @@ import {
   remainingDue,
   settlementId,
   activityUnitPrice,
+  usesQuantity,
 } from "@/lib/finance/activity-calculations";
 import { roundMoney } from "@/lib/finance/money";
 import { monthKey, todayISO } from "@/lib/utils/dates";
@@ -46,22 +47,36 @@ export function buildCheckRecord(input: {
   date: string;
   status: Exclude<ActivityCheckStatus, "pending" | "missed">;
   quantity?: number;
+  amount?: number;
   skipReason?: SkipReason;
   notes?: string;
   existing?: ActivityRecord;
 }): Omit<ActivityRecord, "id"> {
-  const quantity = input.quantity ?? input.activity.defaultQuantity ?? 1;
+  const quantity = input.quantity ?? input.existing?.quantity ?? input.activity.defaultQuantity ?? 1;
   const month = input.date.slice(0, 7);
+  const amountOverride =
+    input.amount !== undefined && Number.isFinite(input.amount)
+      ? roundMoney(Math.max(0, input.amount))
+      : (input.existing?.amountOverride ?? null);
   const calculatedAmount =
-    input.status === "completed" ? recordAmount(input.activity, quantity, month) : 0;
+    input.status === "completed"
+      ? typeof amountOverride === "number"
+        ? amountOverride
+        : recordAmount(input.activity, quantity, month)
+      : 0;
+  const unitPrice =
+    usesQuantity(input.activity) && quantity > 0 && typeof amountOverride === "number"
+      ? roundMoney(amountOverride / quantity)
+      : activityUnitPrice(input.activity);
   return {
     activityId: input.activity.id,
     date: input.date,
     status: input.status,
     quantity,
-    unitPrice: activityUnitPrice(input.activity),
+    unitPrice,
     unit: input.activity.unit,
     calculatedAmount,
+    amountOverride,
     skipReason: input.skipReason,
     notes: input.notes,
     createdAt: input.existing?.createdAt ?? nowIso(),
