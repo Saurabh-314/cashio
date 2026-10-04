@@ -10,7 +10,7 @@ export const CURRENCY_CODES = [
   "JPY",
 ] as const;
 
-export type CurrencyCode = (typeof CURRENCY_CODES)[number]; 
+export type CurrencyCode = (typeof CURRENCY_CODES)[number];
 
 export const DATE_FORMATS = [
   "dd MMM yyyy",
