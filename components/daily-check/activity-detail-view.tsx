@@ -36,6 +36,7 @@ import {
 import { PAUSE_REASONS } from "@/constants/activities";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import {
   activityQuantity,
   activityStreaks,
@@ -486,7 +487,7 @@ export function ActivityDetailView({ activityId }: { activityId: string }) {
                   .filter((item) => !item.archived)
                   .map((account) => (
                     <SelectItem key={account.id} value={account.id}>
-                      {account.name}
+                      {accountLabel(account)}
                     </SelectItem>
                   ))}
               </SelectContent>

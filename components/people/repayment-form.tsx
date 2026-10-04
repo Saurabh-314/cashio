@@ -19,6 +19,7 @@ import {
 import { UDHAR_PAYMENT_METHODS } from "@/constants/people";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { isOpenUdhar, liveUdhars } from "@/lib/finance/udhar";
 import { formatMoney } from "@/lib/finance/money";
 import { getErrorMessage } from "@/lib/firebase/errors";
@@ -138,7 +139,7 @@ export function RepaymentForm({
           <SelectContent>
             {moneyAccounts.map((account) => (
               <SelectItem key={account.id} value={account.id}>
-                {account.name}
+                {accountLabel(account)}
               </SelectItem>
             ))}
           </SelectContent>

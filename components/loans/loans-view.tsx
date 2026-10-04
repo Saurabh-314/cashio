@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { loanProgress } from "@/lib/finance/calculations";
 import { todayISO } from "@/lib/utils/dates";
 import { loanSchema, type LoanValues } from "@/lib/validations";
@@ -232,7 +233,7 @@ export function LoansView() {
                   .filter((item) => item.kind !== "credit")
                   .map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name}
+                      {accountLabel(item)}
                     </SelectItem>
                   ))}
               </SelectContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  deleteField,
   limit,
   onSnapshot,
   orderBy,
@@ -18,6 +19,20 @@ import {
 } from "react";
 import { format, parseISO } from "date-fns";
 import { archiveEndDate } from "@/lib/finance/activity-calculations";
+import { isAssetAccount } from "@/lib/finance/calculations";
+import {
+  absorbEmiPrincipal,
+  convertibleCharges,
+  creditEmiBills as buildCreditEmiBills,
+  openingAvailable,
+  splitEmiPayment,
+  type CreditEmiBill,
+} from "@/lib/finance/credit-emi";
+import {
+  creditCardStatements,
+  type CreditStatement,
+  type UnbilledCredit,
+} from "@/lib/finance/credit-statements";
 import { roundMoney } from "@/lib/finance/money";
 import { lastNMonthsRange, todayISO } from "@/lib/utils/dates";
 import { useAuth } from "@/hooks/use-auth";
@@ -84,6 +99,7 @@ import type {
   Bill,
   Budget,
   Category,
+  CreditEmi,
   Goal,
   Investment,
   Loan,
@@ -157,6 +173,22 @@ interface FinanceContextValue {
   saveBill: (input: Omit<Bill, "id" | "createdAt" | "updatedAt">, id?: string) => Promise<void>;
   markBillPaid: (billId: string, accountId: string) => Promise<void>;
   removeBill: (id: string) => Promise<void>;
+  creditStatements: CreditStatement[];
+  unbilledCredit: UnbilledCredit[];
+  payCreditStatement: (accountId: string, fromAccountId: string, amount: number, statementId: string) => Promise<void>;
+  creditEmis: CreditEmi[];
+  creditEmiBills: CreditEmiBill[];
+  createCreditEmi: (input: {
+    accountId: string;
+    name: string;
+    principalAmount: number;
+    monthlyAmount: number;
+    monthlyInterest: number;
+    startDate: string;
+    transactionIds: string[] | null;
+  }) => Promise<void>;
+  payCreditEmi: (emiId: string, fromAccountId: string, amount: number) => Promise<void>;
+  removeCreditEmi: (id: string) => Promise<void>;
   saveRecurring: (
     input: Omit<RecurringTransaction, "id" | "createdAt" | "updatedAt">,
     id?: string,
@@ -276,6 +308,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
+  const [creditEmis, setCreditEmis] = useState<CreditEmi[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
   const [recurring, setRecurring] = useState<RecurringTransaction[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -305,6 +338,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       onSnapshot(col(uid, "budgets"), (snap) => setBudgets(mapDocs<Budget>(snap.docs))),
       onSnapshot(col(uid, "goals"), (snap) => setGoals(mapDocs<Goal>(snap.docs))),
       onSnapshot(col(uid, "loans"), (snap) => setLoans(mapDocs<Loan>(snap.docs))),
+      onSnapshot(col(uid, "creditEmis"), (snap) => setCreditEmis(mapDocs<CreditEmi>(snap.docs))),
       onSnapshot(col(uid, "bills"), (snap) => setBills(mapDocs<Bill>(snap.docs))),
       onSnapshot(col(uid, "recurringTransactions"), (snap) =>
         setRecurring(mapDocs<RecurringTransaction>(snap.docs)),
@@ -614,6 +648,166 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     if (!uid) return;
     await deleteDocAt(uid, "bills", id);
   }, [uid]);
+
+  const { statements: creditStatements, unbilled: unbilledCredit } = useMemo(
+    () => creditCardStatements(accounts, transactions, todayISO(), creditEmis),
+    [accounts, transactions, creditEmis],
+  );
+
+  const creditEmiBills = useMemo(
+    () => buildCreditEmiBills(creditEmis, accounts),
+    [accounts, creditEmis],
+  );
+
+  const createCreditEmi = useCallback(
+    async (input: {
+      accountId: string;
+      name: string;
+      principalAmount: number;
+      monthlyAmount: number;
+      monthlyInterest: number;
+      startDate: string;
+      transactionIds: string[] | null;
+    }) => {
+      if (!uid) throw new Error("Not signed in");
+      const card = accounts.find((item) => item.id === input.accountId);
+      if (!card || card.kind !== "credit" || card.archived) throw new Error("Choose a credit card");
+      const principal = roundMoney(input.principalAmount);
+      const monthlyAmount = roundMoney(input.monthlyAmount);
+      const monthlyInterest = roundMoney(input.monthlyInterest);
+      if (principal <= 0) throw new Error("Enter an amount to convert");
+      if (principal > roundMoney(card.outstanding)) throw new Error("Amount is more than the outstanding on this card");
+      if (monthlyAmount <= 0) throw new Error("Enter the monthly EMI");
+      if (monthlyInterest < 0 || monthlyInterest >= monthlyAmount) {
+        throw new Error("Interest must be less than the monthly EMI");
+      }
+      const charges = convertibleCharges(card, transactions, accounts, creditEmis);
+      const plan = absorbEmiPrincipal(
+        principal,
+        charges,
+        input.transactionIds,
+        openingAvailable(card, creditEmis),
+      );
+      await addDocAt(uid, "creditEmis", {
+        accountId: card.id,
+        name: input.name.trim() || `${card.name} EMI`,
+        principalAmount: principal,
+        remainingPrincipal: principal,
+        monthlyAmount,
+        monthlyInterest,
+        interestPaid: 0,
+        startDate: input.startDate,
+        absorbed: plan.absorbed,
+        openingAmount: plan.openingAmount,
+      });
+    },
+    [uid, accounts, transactions, creditEmis],
+  );
+
+  const payCreditEmi = useCallback(
+    async (emiId: string, fromAccountId: string, amount: number) => {
+      if (!uid) throw new Error("Not signed in");
+      const plan = creditEmis.find((item) => item.id === emiId);
+      if (!plan) throw new Error("EMI plan not found");
+      const card = accounts.find((item) => item.id === plan.accountId);
+      const from = accounts.find((item) => item.id === fromAccountId);
+      if (!card || card.kind !== "credit") throw new Error("Choose a credit card");
+      if (!from || from.archived || !isAssetAccount(from)) throw new Error("Choose a bank or cash account");
+      const target = creditEmiBills
+        .filter((item) => item.emiId === emiId && item.remaining > 0)
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+      if (!target) throw new Error("Nothing is due on this EMI");
+      const pay = roundMoney(amount);
+      if (pay <= 0) throw new Error("Enter an amount");
+      if (pay > target.remaining) throw new Error("Amount is more than this EMI installment");
+      const { principal, interest } = splitEmiPayment(target, pay);
+      const date = todayISO();
+      if (principal > 0) {
+        await saveTransaction({
+          type: "transfer",
+          amount: principal,
+          date,
+          description: `${plan.name} EMI`,
+          categoryId: null,
+          accountId: null,
+          fromAccountId,
+          toAccountId: card.id,
+          tags: ["credit-card", "emi"],
+          isCreditCardPayment: true,
+          status: "cleared",
+          emiId: plan.id,
+        });
+      }
+      if (interest > 0) {
+        const interestCategory = categories.find(
+          (item) => item.kind === "expense" && item.name.toLowerCase() === "interest",
+        );
+        await saveTransaction({
+          type: "expense",
+          amount: interest,
+          date,
+          description: `${plan.name} interest`,
+          categoryId: interestCategory?.id ?? null,
+          accountId: fromAccountId,
+          fromAccountId: null,
+          toAccountId: null,
+          tags: ["credit-card", "emi"],
+          isCreditCardPayment: false,
+          status: "cleared",
+          emiId: plan.id,
+        });
+      }
+      await updateDocAt(uid, "creditEmis", plan.id, {
+        remainingPrincipal: roundMoney(Math.max(0, plan.remainingPrincipal - principal)),
+        interestPaid: roundMoney((plan.interestPaid ?? 0) + interest),
+      });
+    },
+    [uid, accounts, categories, creditEmis, creditEmiBills, saveTransaction],
+  );
+
+  const removeCreditEmi = useCallback(
+    async (id: string) => {
+      if (!uid) return;
+      const linked = transactions.filter((item) => item.emiId === id);
+      for (const item of linked) {
+        await updateDocAt(uid, "transactions", item.id, { emiId: deleteField() });
+      }
+      await deleteDocAt(uid, "creditEmis", id);
+    },
+    [uid, transactions],
+  );
+
+  const payCreditStatement = useCallback(
+    async (accountId: string, fromAccountId: string, amount: number, statementId: string) => {
+      if (!uid) throw new Error("Not signed in");
+      const card = accounts.find((item) => item.id === accountId);
+      if (!card || card.kind !== "credit" || card.archived) throw new Error("Choose a credit card");
+      const from = accounts.find((item) => item.id === fromAccountId);
+      if (!from || from.archived || !isAssetAccount(from)) {
+        throw new Error("Choose a bank or cash account");
+      }
+      const statement = creditStatements.find((item) => item.id === statementId && item.accountId === accountId);
+      if (!statement || statement.remaining <= 0) throw new Error("This statement is already paid");
+      const pay = roundMoney(amount);
+      if (pay <= 0) throw new Error("Enter an amount");
+      if (pay > statement.remaining) throw new Error("Amount is more than this statement");
+      await saveTransaction({
+        type: "transfer",
+        amount: pay,
+        date: todayISO(),
+        description: `${card.name} bill payment`,
+        categoryId: null,
+        accountId: null,
+        fromAccountId,
+        toAccountId: card.id,
+        tags: ["credit-card", "bill"],
+        isCreditCardPayment: true,
+        statementId,
+        status: "cleared",
+      });
+    },
+    [uid, accounts, creditStatements, saveTransaction],
+  );
 
   const saveRecurring = useCallback(
     async (input: Omit<RecurringTransaction, "id" | "createdAt" | "updatedAt">, id?: string) => {
@@ -1192,6 +1386,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       saveBill,
       markBillPaid,
       removeBill,
+      creditStatements,
+      unbilledCredit,
+      payCreditStatement,
+      creditEmis,
+      creditEmiBills,
+      createCreditEmi,
+      payCreditEmi,
+      removeCreditEmi,
       saveRecurring,
       removeRecurring,
       saveInvestment,
@@ -1275,6 +1477,14 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
       saveBill,
       markBillPaid,
       removeBill,
+      creditStatements,
+      unbilledCredit,
+      payCreditStatement,
+      creditEmis,
+      creditEmiBills,
+      createCreditEmi,
+      payCreditEmi,
+      removeCreditEmi,
       saveRecurring,
       removeRecurring,
       saveInvestment,

@@ -193,6 +193,8 @@ export interface Transaction {
   principalAmount?: number;
   interestAmount?: number;
   isCreditCardPayment: boolean;
+  emiId?: string;
+  statementId?: string;
   status: TransactionStatus;
   createdAt: string;
   updatedAt: string;
@@ -221,6 +223,27 @@ export interface Goal {
   description?: string;
   icon: string;
   color: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditEmiAbsorption {
+  transactionId: string;
+  amount: number;
+}
+
+export interface CreditEmi {
+  id: string;
+  accountId: string;
+  name: string;
+  principalAmount: number;
+  remainingPrincipal: number;
+  monthlyAmount: number;
+  monthlyInterest: number;
+  interestPaid: number;
+  startDate: string;
+  absorbed: CreditEmiAbsorption[];
+  openingAmount: number;
   createdAt: string;
   updatedAt: string;
 }

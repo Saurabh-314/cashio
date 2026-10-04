@@ -3,6 +3,7 @@
 import { Paperclip } from "lucide-react";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
 import { useAuth } from "@/hooks/use-auth";
+import { accountLabel } from "@/lib/finance/account-label";
 import {
   isUdharTransaction,
   signedTransactionAmount,
@@ -37,10 +38,10 @@ export function TransactionItem({
   const signedAmount = signedTransactionAmount(transaction);
   const subtitle =
     transaction.type === "transfer"
-      ? `${account?.name ?? "From"} → ${to?.name ?? "To"}`
+      ? `${accountLabel(account, "From")} → ${accountLabel(to, "To")}`
       : isUdhar
-        ? ["People & Udhar", account?.name].filter(Boolean).join(" · ")
-        : [category?.name, account?.name].filter(Boolean).join(" · ");
+        ? ["People & Udhar", accountLabel(account)].filter(Boolean).join(" · ")
+        : [category?.name, accountLabel(account)].filter(Boolean).join(" · ");
 
   return (
     <button

@@ -1,3 +1,4 @@
+import { accountLabel } from "@/lib/finance/account-label";
 import { formatMoney } from "@/lib/finance/money";
 import {
   billStatus,
@@ -119,7 +120,7 @@ export function buildInsights(input: {
       insights.push({
         id: `cc-${account.id}`,
         tone: util >= 70 ? "warning" : "info",
-        title: `${account.name} utilization is ${util.toFixed(0)}%`,
+        title: `${accountLabel(account)} utilization is ${util.toFixed(0)}%`,
         body: "Keeping credit utilization under 30% typically helps your credit profile.",
       });
     }

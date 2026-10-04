@@ -18,6 +18,7 @@ import { Field } from "@/components/forms/field";
 import { MoneyInput } from "@/components/forms/money-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { todayISO } from "@/lib/utils/dates";
 import { transactionSchema, type TransactionValues } from "@/lib/validations";
 import { uploadReceipt } from "@/services/storage";
@@ -138,7 +139,7 @@ export function TransactionForm({
               <SelectContent>
                 {activeAccounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
-                    {account.name}
+                    {accountLabel(account)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -156,7 +157,7 @@ export function TransactionForm({
               <SelectContent>
                 {activeAccounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
-                    {account.name}
+                    {accountLabel(account)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -176,7 +177,7 @@ export function TransactionForm({
             <SelectContent>
               {activeAccounts.map((account) => (
                 <SelectItem key={account.id} value={account.id}>
-                  {account.name}
+                  {accountLabel(account)}
                 </SelectItem>
               ))}
             </SelectContent>

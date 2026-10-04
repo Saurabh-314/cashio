@@ -15,6 +15,7 @@ import { TransactionItem } from "@/components/transactions/transaction-item";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import {
   availableCredit,
   billStatus,
@@ -71,7 +72,7 @@ const RANGE_OPTIONS = [
 
 export function DashboardView() {
   const { profile } = useAuth();
-  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, people, udhars, udharRepayments, notes, openQuickAdd } =
+  const { loading, accounts, transactions, categories, budgets, bills, goals, loans, investments, activities, activityRecords, settlements, people, udhars, udharRepayments, notes, openQuickAdd, creditStatements, creditEmiBills } =
     useFinance();
   const router = useRouter();
   const [rangeId, setRangeId] = useState<(typeof RANGE_OPTIONS)[number]["id"]>("6m");
@@ -100,6 +101,33 @@ export function DashboardView() {
         color: palette[index % palette.length],
       };
     });
+    const statementBills = creditStatements
+      .filter((item) => item.remaining > 0)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        amount: item.remaining,
+        dueDate: item.dueDate,
+        frequency: "once" as const,
+        reminderDays: 0,
+        autoRecurring: false,
+        createdAt: "",
+        updatedAt: "",
+      }));
+    const emiBills = creditEmiBills
+      .filter((item) => item.remaining > 0)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        amount: item.remaining,
+        dueDate: item.dueDate,
+        frequency: "once" as const,
+        reminderDays: 0,
+        autoRecurring: false,
+        createdAt: "",
+        updatedAt: "",
+      }));
+    const allBills = [...bills, ...statementBills, ...emiBills].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     const insights = buildInsights({
       currency,
       current,
@@ -107,7 +135,7 @@ export function DashboardView() {
       transactions,
       categories,
       budgets,
-      bills,
+      bills: allBills,
       accounts,
       goals,
       month: monthKey(),
@@ -128,8 +156,9 @@ export function DashboardView() {
           days: Math.abs(daysUntil(item.dueDate ?? todayISO())),
         })),
     });
-    return { currentRange, current, previous, series, spend, insights };
-  }, [accounts, activities, activityRecords, bills, budgets, categories, currency, goals, monthStartDay, people, rangeId, settlements, transactions, udharRepayments, udhars]);
+    const upcomingBills = allBills.filter((bill) => billStatus(bill) !== "paid");
+    return { currentRange, current, previous, series, spend, insights, upcomingBills };
+  }, [accounts, activities, activityRecords, bills, budgets, categories, creditEmiBills, creditStatements, currency, goals, monthStartDay, people, rangeId, settlements, transactions, udharRepayments, udhars]);
 
   if (loading) return <DashboardSkeleton />;
 
@@ -413,9 +442,8 @@ export function DashboardView() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
-                {bills.filter((bill) => billStatus(bill) !== "paid").length ? (
-                  bills
-                    .filter((bill) => billStatus(bill) !== "paid")
+                {data.upcomingBills.length ? (
+                  data.upcomingBills
                     .slice(0, 4)
                     .map((bill) => {
                       const days = daysUntil(bill.dueDate);
@@ -573,7 +601,7 @@ export function DashboardView() {
                   cards.map((card) => (
                     <div key={card.id} className="space-y-1.5">
                       <div className="flex justify-between text-sm">
-                        <span>{card.name}</span>
+                        <span>{accountLabel(card)}</span>
                         <span>{creditUtilization(card).toFixed(0)}% used</span>
                       </div>
                       <Progress value={creditUtilization(card)} />

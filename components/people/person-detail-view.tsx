@@ -41,6 +41,7 @@ import { relationshipLabel } from "@/constants/people";
 import { UDHAR_PAYMENT_METHODS } from "@/constants/people";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { formatMoney } from "@/lib/finance/money";
 import {
   buildPersonLedger,
@@ -472,7 +473,7 @@ export function PersonDetailView({ personId }: { personId: string }) {
             overlap={netPlan.overlap}
             currency={currency}
             defaultAccountId={profile?.defaultAccountId ?? accounts.find((item) => !item.archived)?.id ?? ""}
-            accounts={accounts.filter((item) => !item.archived && item.kind !== "investment").map((item) => ({ id: item.id, name: item.name }))}
+            accounts={accounts.filter((item) => !item.archived && item.kind !== "investment").map((item) => ({ id: item.id, name: accountLabel(item) }))}
             onConfirm={async (values) => {
               await settleNet({
                 personId: person.id,
@@ -584,7 +585,7 @@ function NetSettleForm({
               <SelectContent>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
-                    {account.name}
+                    {accountLabel(account)}
                   </SelectItem>
                 ))}
               </SelectContent>

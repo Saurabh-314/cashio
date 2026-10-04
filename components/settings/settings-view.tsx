@@ -18,6 +18,7 @@ import {
 import { useTheme } from "next-themes";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { CURRENCIES, DATE_FORMAT_LABELS } from "@/constants/currencies";
 import { DEFAULT_WIDGETS, DEFAULT_NOTIFICATIONS } from "@/services/users";
 import { downloadTextFile, parseCsv, transactionsToCsv } from "@/lib/csv";
@@ -133,7 +134,7 @@ export function SettingsView() {
                 <SelectItem value="none">None</SelectItem>
                 {accounts.map((account) => (
                   <SelectItem key={account.id} value={account.id}>
-                    {account.name}
+                    {accountLabel(account)}
                   </SelectItem>
                 ))}
               </SelectContent>

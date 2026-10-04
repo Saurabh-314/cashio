@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { budgetSpent, budgetStatus } from "@/lib/finance/calculations";
 import { monthKey } from "@/lib/utils/dates";
 import { budgetSchema, type BudgetValues } from "@/lib/validations";
@@ -163,7 +164,7 @@ export function BudgetsView() {
                   <SelectContent>
                     {accounts.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
-                        {item.name}
+                        {accountLabel(item)}
                       </SelectItem>
                     ))}
                   </SelectContent>

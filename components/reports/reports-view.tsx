@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import {
   budgetSpent,
   monthlySeries,
@@ -189,7 +190,7 @@ export function ReportsView() {
               .filter((item) => !item.archived)
               .map((account) => (
                 <div key={account.id} className="flex justify-between text-sm">
-                  <span>{account.name}</span>
+                  <span>{accountLabel(account)}</span>
                   <CurrencyDisplay
                     amount={account.kind === "credit" ? -account.outstanding : account.currentBalance}
                     currency={currency}

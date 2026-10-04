@@ -32,6 +32,7 @@ import {
 import { ACTIVITY_GROUPS, SKIP_REASONS } from "@/constants/activities";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import {
   formatQuantityWithUnit,
   formatSchedule,
@@ -595,7 +596,7 @@ export function DailyCheckView() {
                     .filter((item) => !item.archived)
                     .map((account) => (
                       <SelectItem key={account.id} value={account.id}>
-                        {account.name}
+                        {accountLabel(account)}
                       </SelectItem>
                     ))}
                 </SelectContent>

@@ -22,6 +22,7 @@ import {
 import { PERSON_RELATIONSHIPS, UDHAR_INTEREST_TYPES, UDHAR_TYPES } from "@/constants/people";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { computeInterest } from "@/lib/finance/udhar";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { todayISO } from "@/lib/utils/dates";
@@ -205,7 +206,7 @@ export function UdharForm({
             <SelectContent>
               {moneyAccounts.map((account) => (
                 <SelectItem key={account.id} value={account.id}>
-                  {account.name}
+                  {accountLabel(account)}
                 </SelectItem>
               ))}
             </SelectContent>

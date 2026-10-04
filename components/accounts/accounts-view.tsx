@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLast4 } from "@/lib/finance/account-label";
 import { availableCredit, creditUtilization } from "@/lib/finance/calculations";
 import { countTransactionsForAccount } from "@/services/transactions";
 import { getErrorMessage } from "@/lib/firebase/errors";
@@ -46,6 +47,7 @@ export function AccountsView() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visible.map((account) => {
             const credit = account.kind === "credit";
+            const last4 = accountLast4(account);
             return (
               <Card key={account.id} className="rounded-lg shadow-sm">
                 <CardContent className="space-y-4">
@@ -54,7 +56,7 @@ export function AccountsView() {
                       <p className="font-medium">{account.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {account.bankName ?? (account.kind === "credit" ? "Credit card" : "Account")}
-                        {account.last4 ? ` · •••• ${account.last4}` : ""}
+                        {last4 ? ` · •••• ${last4}` : ""}
                       </p>
                     </Link>
                     <Button

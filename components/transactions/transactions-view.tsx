@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { formatDate } from "@/lib/utils/dates";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
@@ -70,7 +71,7 @@ export function TransactionsView() {
       if (categoryId !== "all" && tx.categoryId !== categoryId) return false;
       if (!query) return true;
       const category = categories.find((item) => item.id === tx.categoryId)?.name ?? "";
-      const account = accounts.find((item) => item.id === (tx.accountId ?? tx.fromAccountId))?.name ?? "";
+      const account = accountLabel(accounts.find((item) => item.id === (tx.accountId ?? tx.fromAccountId)));
       return [tx.description, tx.merchant, tx.notes, category, account, String(tx.amount)]
         .filter(Boolean)
         .join(" ")
@@ -118,7 +119,7 @@ export function TransactionsView() {
           <SelectItem value="all">All accounts</SelectItem>
           {accounts.map((account) => (
             <SelectItem key={account.id} value={account.id}>
-              {account.name}
+              {accountLabel(account)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -204,7 +205,7 @@ export function TransactionsView() {
                       <TableCell className="text-muted-foreground">
                         {isUdharTransaction(tx) ? "People & Udhar" : category?.name ?? "—"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{account?.name ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{accountLabel(account, "—")}</TableCell>
                       <TableCell className="text-muted-foreground">{transactionTypeLabel(tx)}</TableCell>
                       <TableCell className="text-right">
                         <CurrencyDisplay
@@ -287,8 +288,8 @@ export function TransactionsView() {
                   label="Account"
                   value={
                     selected.type === "transfer"
-                      ? `${accounts.find((item) => item.id === selected.fromAccountId)?.name} → ${accounts.find((item) => item.id === selected.toAccountId)?.name}`
-                      : accounts.find((item) => item.id === selected.accountId)?.name ?? "—"
+                      ? `${accountLabel(accounts.find((item) => item.id === selected.fromAccountId), "—")} → ${accountLabel(accounts.find((item) => item.id === selected.toAccountId), "—")}`
+                      : accountLabel(accounts.find((item) => item.id === selected.accountId), "—")
                   }
                 />
                 <Row label="Merchant" value={selected.merchant || "—"} />

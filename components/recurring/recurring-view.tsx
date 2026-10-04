@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { nextOccurrence, todayISO } from "@/lib/utils/dates";
 import { recurringSchema, type RecurringValues } from "@/lib/validations";
 import { getErrorMessage } from "@/lib/firebase/errors";
@@ -167,7 +168,7 @@ export function RecurringView() {
                 <SelectContent>
                   {accounts.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name}
+                      {accountLabel(item)}
                     </SelectItem>
                   ))}
                 </SelectContent>

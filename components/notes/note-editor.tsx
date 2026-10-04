@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
+import { accountLabel } from "@/lib/finance/account-label";
 import { parseTags } from "@/lib/notes";
 import { parseNoteContent, serializeNoteContent } from "@/lib/note-document";
 import { clearNoteDraft, draftIsNewer, loadNoteDraft, saveNoteDraft, type NoteDraft } from "@/lib/notes-draft";
@@ -135,7 +136,7 @@ export function NoteEditorView({ noteId }: { noteId?: string }) {
   }, [content, draftId, title, uid]);
 
   const relatedOptions = useMemo(() => {
-    if (relatedType === "account") return accounts.map((item) => ({ id: item.id, name: item.name }));
+    if (relatedType === "account") return accounts.map((item) => ({ id: item.id, name: accountLabel(item) }));
     if (relatedType === "activity") return activities.map((item) => ({ id: item.id, name: item.name }));
     if (relatedType === "provider") return providers.map((item) => ({ id: item.id, name: item.name }));
     if (relatedType === "transaction") {

@@ -18,7 +18,7 @@ import { billStatus } from "@/lib/finance/calculations";
 import { cn } from "@/lib/utils";
 
 export function CalendarView() {
-  const { bills, loans, recurring, transactions, accounts } = useFinance();
+  const { bills, loans, recurring, transactions, creditStatements, creditEmiBills } = useFinance();
   const [cursor, setCursor] = useState(new Date());
   const days = useMemo(() => {
     const start = startOfWeek(startOfMonth(cursor), { weekStartsOn: 1 });
@@ -46,13 +46,16 @@ export function CalendarView() {
     for (const tx of transactions) {
       if (tx.type === "income" && !tx.udharId) push(tx.date, tx.description, "income");
     }
-    for (const account of accounts.filter((item) => item.kind === "credit")) {
-      if (!account.paymentDueDay) continue;
-      const due = `${format(cursor, "yyyy-MM")}-${String(account.paymentDueDay).padStart(2, "0")}`;
-      push(due, `${account.name} due`, "expense");
+    for (const statement of creditStatements) {
+      if (statement.remaining <= 0) continue;
+      push(statement.dueDate, statement.name, "expense");
+    }
+    for (const bill of creditEmiBills) {
+      if (bill.remaining <= 0) continue;
+      push(bill.dueDate, bill.name, "expense");
     }
     return map;
-  }, [accounts, bills, cursor, loans, recurring, transactions]);
+  }, [bills, creditEmiBills, creditStatements, cursor, loans, recurring, transactions]);
 
   return (
     <div>
