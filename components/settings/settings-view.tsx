@@ -32,7 +32,8 @@ export function SettingsView() {
   const { user, profile, changePassword: updateLoginPassword, deleteAccount } = useAuth();
   const { accounts, categories, transactions, saveTransaction, updateProfile } = useFinance();
   const { theme, setTheme } = useTheme();
-  const [name, setName] = useState(profile?.displayName ?? "");
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const name = nameDraft ?? profile?.displayName ?? "";
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof parseCsv>>([]);
@@ -65,7 +66,7 @@ export function SettingsView() {
         </CardHeader>
         <CardContent className="grid gap-3 sm:max-w-md">
           <Field label="Name">
-            <Input value={name} onChange={(event) => setName(event.target.value)} />
+            <Input value={name} onChange={(event) => setNameDraft(event.target.value)} />
           </Field>
           <Field label="Email">
             <Input value={profile?.email ?? ""} disabled />
