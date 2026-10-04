@@ -19,6 +19,8 @@ import { accountLabel } from "@/lib/finance/account-label";
 import {
   availableCredit,
   billStatus,
+  displayedTransactionBalance,
+  transactionBalanceAfter,
   budgetSpent,
   budgetStatus,
   creditUtilization,
@@ -77,6 +79,7 @@ export function DashboardView() {
   const router = useRouter();
   const [rangeId, setRangeId] = useState<(typeof RANGE_OPTIONS)[number]["id"]>("6m");
   const currency = profile?.currency ?? "INR";
+  const balances = useMemo(() => transactionBalanceAfter(accounts, transactions), [accounts, transactions]);
   const widgets = profile?.widgets;
   const monthStartDay = profile?.monthStartDay ?? 1;
 
@@ -416,7 +419,13 @@ export function DashboardView() {
             <CardContent>
               {transactions.length ? (
                 transactions.slice(0, 8).map((tx) => (
-                  <TransactionItem key={tx.id} transaction={tx} accounts={accounts} categories={categories} />
+                  <TransactionItem
+                    key={tx.id}
+                    transaction={tx}
+                    accounts={accounts}
+                    categories={categories}
+                    balance={displayedTransactionBalance(tx, balances)}
+                  />
                 ))
               ) : (
                 <EmptyState

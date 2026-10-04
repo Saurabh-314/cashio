@@ -183,6 +183,61 @@ export function applyDeltas(accounts: Account[], deltas: BalanceDelta[]): Accoun
   return next;
 }
 
+export function transactionBalanceAfter(
+  accounts: Account[],
+  transactions: Transaction[],
+): Map<string, Map<string, number>> {
+  const accountsById = new Map(accounts.map((account) => [account.id, account]));
+  const byAccount = new Map<string, { tx: Transaction; balanceDelta: number; outstandingDelta: number }[]>();
+
+  for (const tx of transactions) {
+    const summed = new Map<string, { balanceDelta: number; outstandingDelta: number }>();
+    for (const delta of transactionDeltas(tx, accountsById)) {
+      const current = summed.get(delta.accountId) ?? { balanceDelta: 0, outstandingDelta: 0 };
+      current.balanceDelta = roundMoney(current.balanceDelta + delta.balanceDelta);
+      current.outstandingDelta = roundMoney(current.outstandingDelta + delta.outstandingDelta);
+      summed.set(delta.accountId, current);
+    }
+    for (const [accountId, delta] of summed) {
+      const list = byAccount.get(accountId) ?? [];
+      list.push({ tx, ...delta });
+      byAccount.set(accountId, list);
+    }
+  }
+
+  const result = new Map<string, Map<string, number>>();
+  for (const account of accounts) {
+    const events = byAccount.get(account.id) ?? [];
+    events.sort(
+      (a, b) =>
+        b.tx.date.localeCompare(a.tx.date) ||
+        b.tx.createdAt.localeCompare(a.tx.createdAt) ||
+        b.tx.id.localeCompare(a.tx.id),
+    );
+    let balance = isCredit(account) ? account.outstanding : account.currentBalance;
+    for (const event of events) {
+      const row = result.get(event.tx.id) ?? new Map<string, number>();
+      row.set(account.id, balance);
+      result.set(event.tx.id, row);
+      balance = roundMoney(balance - (isCredit(account) ? event.outstandingDelta : event.balanceDelta));
+    }
+  }
+  return result;
+}
+
+export function displayedTransactionBalance(
+  tx: Pick<Transaction, "id" | "accountId" | "fromAccountId" | "toAccountId">,
+  balances: Map<string, Map<string, number>>,
+  accountId?: string,
+): number | null {
+  const row = balances.get(tx.id);
+  if (!row) return null;
+  const id =
+    accountId && row.has(accountId) ? accountId : (tx.accountId ?? tx.fromAccountId ?? tx.toAccountId ?? null);
+  if (!id) return null;
+  return row.get(id) ?? null;
+}
+
 export function deriveAccountState(
   account: Account,
   transactions: Transaction[],

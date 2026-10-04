@@ -11,7 +11,13 @@ import { TransactionItem } from "@/components/transactions/transaction-item";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
 import { accountLast4 } from "@/lib/finance/account-label";
-import { availableCredit, creditUtilization, periodTotals } from "@/lib/finance/calculations";
+import {
+  availableCredit,
+  creditUtilization,
+  displayedTransactionBalance,
+  periodTotals,
+  transactionBalanceAfter,
+} from "@/lib/finance/calculations";
 import { unpaidStatementTotal, type CreditStatement, type UnbilledCredit } from "@/lib/finance/credit-statements";
 import { formatDate, monthRange } from "@/lib/utils/dates";
 import { ConvertEmiDialog } from "@/components/accounts/convert-emi-dialog";
@@ -39,6 +45,7 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
       ),
     [accountId, transactions],
   );
+  const balances = useMemo(() => transactionBalanceAfter(accounts, transactions), [accounts, transactions]);
   const range = monthRange();
   const totals = periodTotals(
     related.map((tx) =>
@@ -200,7 +207,13 @@ export function AccountDetailView({ accountId }: { accountId: string }) {
         <CardContent>
           {related.length ? (
             related.slice(0, 20).map((tx) => (
-              <TransactionItem key={tx.id} transaction={tx} accounts={accounts} categories={categories} />
+              <TransactionItem
+                key={tx.id}
+                transaction={tx}
+                accounts={accounts}
+                categories={categories}
+                balance={displayedTransactionBalance(tx, balances, account.id)}
+              />
             ))
           ) : (
             <p className="text-sm text-muted-foreground">No transactions on this account yet.</p>

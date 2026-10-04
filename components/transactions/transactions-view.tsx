@@ -32,13 +32,16 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
 import { accountLabel } from "@/lib/finance/account-label";
+import { formatMoney } from "@/lib/finance/money";
 import { formatDate } from "@/lib/utils/dates";
 import { getErrorMessage } from "@/lib/firebase/errors";
 import { CurrencyDisplay } from "@/components/shared/currency-display";
 import {
+  displayedTransactionBalance,
   isUdharTransaction,
   signedTransactionAmount,
   transactionAmountTone,
+  transactionBalanceAfter,
   transactionTypeLabel,
 } from "@/lib/finance/calculations";
 import { EntityNotes } from "@/components/notes/entity-notes";
@@ -57,6 +60,10 @@ export function TransactionsView() {
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const balances = useMemo(() => transactionBalanceAfter(accounts, transactions), [accounts, transactions]);
+  const balanceFor = (tx: Transaction) =>
+    displayedTransactionBalance(tx, balances, accountId === "all" ? undefined : accountId);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -178,6 +185,7 @@ export function TransactionsView() {
                   <TableHead>Account</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -216,6 +224,17 @@ export function TransactionsView() {
                           className="text-sm font-medium"
                         />
                       </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {balanceFor(tx) == null ? (
+                          "—"
+                        ) : (
+                          <CurrencyDisplay
+                            amount={balanceFor(tx) ?? 0}
+                            currency={profile?.currency ?? "INR"}
+                            className="text-sm"
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{tx.status}</Badge>
                       </TableCell>
@@ -232,6 +251,7 @@ export function TransactionsView() {
                 transaction={tx}
                 accounts={accounts}
                 categories={categories}
+                balance={balanceFor(tx)}
                 onClick={() => {
                   setSelected(tx);
                   setEditing(false);
@@ -290,6 +310,14 @@ export function TransactionsView() {
                     selected.type === "transfer"
                       ? `${accountLabel(accounts.find((item) => item.id === selected.fromAccountId), "—")} → ${accountLabel(accounts.find((item) => item.id === selected.toAccountId), "—")}`
                       : accountLabel(accounts.find((item) => item.id === selected.accountId), "—")
+                  }
+                />
+                <Row
+                  label="Balance"
+                  value={
+                    balanceFor(selected) == null
+                      ? "—"
+                      : formatMoney(balanceFor(selected) ?? 0, profile?.currency ?? "INR")
                   }
                 />
                 <Row label="Merchant" value={selected.merchant || "—"} />

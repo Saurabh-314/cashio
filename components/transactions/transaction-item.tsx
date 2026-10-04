@@ -17,21 +17,18 @@ export function TransactionItem({
   transaction,
   accounts,
   categories,
+  balance,
   onClick,
 }: {
   transaction: Transaction;
   accounts: Account[];
   categories: Category[];
+  balance?: number | null;
   onClick?: () => void;
 }) {
   const { profile } = useAuth();
   const category = categories.find((item) => item.id === transaction.categoryId);
-  const account = accounts.find(
-    (item) =>
-      item.id === transaction.accountId ||
-      item.id === transaction.fromAccountId ||
-      item.id === transaction.toAccountId,
-  );
+  const account = accounts.find((item) => item.id === (transaction.accountId ?? transaction.fromAccountId));
   const to = accounts.find((item) => item.id === transaction.toAccountId);
   const isUdhar = isUdharTransaction(transaction);
   const amountTone = transactionAmountTone(transaction);
@@ -60,13 +57,21 @@ export function TransactionItem({
           {formatDate(transaction.date, profile?.dateFormat)}
         </p>
       </div>
-      <CurrencyDisplay
-        amount={signedAmount}
-        currency={profile?.currency ?? "INR"}
-        signed={transaction.type !== "transfer"}
-        tone={amountTone}
-        className={cn("text-sm font-medium", transaction.type === "transfer" && "text-muted-foreground")}
-      />
+      <div className="shrink-0 text-right">
+        <CurrencyDisplay
+          amount={signedAmount}
+          currency={profile?.currency ?? "INR"}
+          signed={transaction.type !== "transfer"}
+          tone={amountTone}
+          className={cn("text-sm font-medium", transaction.type === "transfer" && "text-muted-foreground")}
+        />
+        {balance != null ? (
+          <p className="text-[11px] text-muted-foreground">
+            Balance{" "}
+            <CurrencyDisplay amount={balance} currency={profile?.currency ?? "INR"} className="text-[11px]" />
+          </p>
+        ) : null}
+      </div>
     </button>
   );
 }
