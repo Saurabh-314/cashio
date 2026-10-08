@@ -18,7 +18,8 @@ import { Field } from "@/components/forms/field";
 import { MoneyInput } from "@/components/forms/money-input";
 import { useAuth } from "@/hooks/use-auth";
 import { useFinance } from "@/hooks/use-finance";
-import { accountLabel } from "@/lib/finance/account-label";
+import { accountBalance, accountLabel } from "@/lib/finance/account-label";
+import { formatMoney } from "@/lib/finance/money";
 import { todayISO } from "@/lib/utils/dates";
 import { transactionSchema, type TransactionValues } from "@/lib/validations";
 import { uploadReceipt } from "@/services/storage";
@@ -64,6 +65,7 @@ export function TransactionForm({
 
   const watchType = form.watch("type");
   const activeAccounts = accounts.filter((item) => !item.archived);
+  const currency = profile?.currency ?? "INR";
 
   async function onSubmit(values: TransactionValues) {
     await saveTransaction(
@@ -114,7 +116,7 @@ export function TransactionForm({
         </Field>
         <Field label="Amount" error={form.formState.errors.amount?.message}>
           <MoneyInput
-            currency={profile?.currency ?? "INR"}
+            currency={currency}
             value={form.watch("amount")}
             onChange={(value) => form.setValue("amount", value, { shouldValidate: true })}
           />
@@ -138,8 +140,11 @@ export function TransactionForm({
               </SelectTrigger>
               <SelectContent>
                 {activeAccounts.map((account) => (
-                  <SelectItem key={account.id} value={account.id}>
-                    {accountLabel(account)}
+                  <SelectItem key={account.id} value={account.id} textValue={accountLabel(account)} className="[&>span:last-child]:w-full">
+                    <span className="min-w-0 truncate">{accountLabel(account)}</span>
+                    <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
+                      {formatMoney(accountBalance(account), currency)}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

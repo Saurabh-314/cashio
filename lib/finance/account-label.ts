@@ -2,6 +2,12 @@ import type { Account, AccountKind } from "@/types";
 
 type NamedAccount = Pick<Account, "name"> & Partial<Pick<Account, "kind" | "last4">>;
 
+export function accountBalance(
+  account: Pick<Account, "kind" | "currentBalance" | "outstanding">,
+): number {
+  return account.kind === "credit" ? account.outstanding : account.currentBalance;
+}
+
 export function accountLast4(
   account: { kind?: AccountKind; last4?: string } | null | undefined,
 ): string | null {
